@@ -1,0 +1,8 @@
+torch
+numpy
+scipy
+scikit-learn
+matplotlib
+pytest
+# jetnet   # optional: enables Tier-2 FPD/KPD. Installs on Python 3.11/3.12 (e.g. Colab),
+#          # not on Python 3.14. Without it, FPD/KPD return None and everything else runs.
