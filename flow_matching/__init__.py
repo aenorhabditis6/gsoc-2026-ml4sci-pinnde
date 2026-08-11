@@ -13,12 +13,13 @@ and score-based tracks produce directly comparable numbers.
 """
 
 from .core import fm_loss, sample
-from .model import FourierTimeEmbedding, VelocityField
+from .model import FourierFeatures, FourierTimeEmbedding, VelocityField
 from .train import train_flow_matching
 
 __all__ = [
     "fm_loss",
     "sample",
+    "FourierFeatures",
     "FourierTimeEmbedding",
     "VelocityField",
     "train_flow_matching",

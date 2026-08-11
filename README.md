@@ -26,6 +26,13 @@ pip install -r requirements.txt
 ```
 
 Runs on CPU (a GPU helps only the flow-matching training, which is tiny here).
+
+> **Threading gotcha:** if numpy links a threaded OpenBLAS (e.g. numpy 1.26
+> wheels on macOS), run the scripts with `OPENBLAS_NUM_THREADS=1`. The Tier-1
+> classifier issues thousands of tiny matrix multiplies and OpenBLAS's
+> thread busy-wait can turn a 9-second `evaluate()` into >30 minutes of
+> spinning that looks like a hang. Colab's default numpy is unaffected.
+
 Nothing is pip-installed as a package — put this `Tina/` folder on the path:
 
 ```python
@@ -96,6 +103,42 @@ pass a function that returns shower observables (layer energies, widths, …):
 res = evaluate(real, gen, tier="full", features_fn=shower_observables)
 ```
 
+### Stability vs. sample size — *how many samples do I need to trust a number?*
+Every metric has a finite-N **null floor** (the value a *perfect* generator shows)
+and a finite-N **spread**. The stability study measures both, plus the smallest N
+at which a fixed perturbation separates from the floor by 2 combined error bars:
+
+```python
+from pinnde_eval import stability_study, separation_z, min_resolvable_n
+
+study = stability_study(n_grid=(250, 1000, 4000), kind="mean", eps=0.2)
+min_resolvable_n(study)   # e.g. {"swd": 250, "auc": 4000, ...}
+```
+
+```bash
+python -m pinnde_eval.stability     # full table + figures/stability.png (takes a few min)
+```
+
+Rule of thumb from the study: **never compare a metric value against zero —
+compare it against the null floor at your N** (the floors are in `DEVLOG.md` §8).
+
+### Local discrepancy maps — *where does the generator fail?*
+A global score hides localized failures (a dropped or shifted mode barely moves
+SWD). Three maps in `pinnde_eval.local` point at the failing *region*:
+
+| Map | Question | Reading |
+|---|---|---|
+| `mmd_witness(real, gen, points)` | where is probability mass wrong? | > 0 real over-dense (missed), < 0 gen over-dense (hallucinated) |
+| `classifier_discrepancy(real, gen)` | which samples give it away? | out-of-fold P(real\|x) per sample; sort gen ascending → worst fakes |
+| `binned_residual_map(real, gen, features=(0,1))` | which histogram bins disagree? | per-bin z ~ N(0,1) under null; \|z\| > 3 = genuine local failure |
+
+```bash
+python make_local_figure.py        # demo: all three maps light up on the broken modes
+```
+
+All three run in feature space, so for showers they apply to any observable pair
+(e.g. layer energy vs. width) through the same `features_fn` hook.
+
 ### Validate the metrics on toys
 ```bash
 python -m pinnde_eval.validate_toys
@@ -135,26 +178,54 @@ python -m flow_matching.demo
 Lipman convention). The diffusion / score track uses the opposite labelling
 (`t=0` data → `t=1` noise); the two are related by `t → 1−t`.
 
+### Conditional generation — *the actual calorimeter target is p(shower | E_inc)*
+Pass a per-sample condition (e.g. normalized log incident energy) and the field
+becomes `vθ(x, t, c)`; the condition enters as its raw value plus a
+low-frequency Fourier embedding:
+
+```python
+model, history = train_flow_matching(x, dim=3, cond=c)     # c: (N, 1)
+gen = sample(model, n=5000, dim=3, cond=0.9)               # everyone at c=0.9
+gen = sample(model, n=5000, dim=3, cond=c_eval)            # matched per-row conds
+```
+
+Run the end-to-end conditional demo (calo-flavored toy: sampling fraction /
+depth / width vs. energy, correlated + skewed):
+
+```bash
+python -m flow_matching.demo_conditional
+```
+
+It scores the model three ways, strictest last: pooled over all energies,
+**per energy bin** (`evaluate_by_condition` — a bad bin cannot hide), and at
+**fixed unseen conditions** c* ∈ {0.1, 0.5, 0.9} against fresh truth draws at
+exactly those c* (the interpolation test a marginal model would fail).
+
 ---
 
 ## Tests
 
 ```bash
-python -m pytest pinnde_eval/tests flow_matching/tests -q     # 27 tests
+python -m pytest pinnde_eval/tests flow_matching/tests -q     # 45 tests
 ```
 
 ## Reproduce the figures (in `figures/`)
 ```bash
 python make_figures.py        # sensitivity + flow-matching result figures
 python make_flow_figure.py    # velocity field + noise->data trajectories
+python make_local_figure.py   # local discrepancy maps on a broken generator
+python -m pinnde_eval.stability   # metric stability vs sample size
 ```
 
 | Figure | Shows |
 |---|---|
 | `sensitivity.png` | every metric grows as the distribution is perturbed (module is calibrated) |
+| `stability.png` | null floor, spread, and resolvability of every metric vs. sample size N |
+| `local_discrepancy.png` | the three local maps lighting up exactly on a dropped + shifted mode |
 | `fm_convergence.png` | flow-matching MMD/SWD falling to the null floor during training |
 | `fm_scatter.png`, `fm_histograms.png` | generated vs. true (2-D GMM) |
 | `fm_flow.png` | the learned velocity field and noise→data trajectories |
+| `fm_conditional.png` | conditional FM tracking p(observables \| energy): means vs. c + per-bin histograms |
 
 ### Toy result (2-D GMM, 6 modes)
 Generated-vs-truth lands near the statistical floor:
@@ -165,11 +236,14 @@ Generated-vs-truth lands near the statistical floor:
 ## Note: FPD / KPD need `jetnet`
 FPD and KPD wrap `jetnet.evaluation`. If `jetnet` is not installed they return
 `None` and everything else still runs (the module degrades gracefully — this path
-is tested). `jetnet` installs cleanly on Python 3.11/3.12 (e.g. Google Colab); it
-fails to build on Python 3.14. To get FPD/KPD numbers:
+is tested). A plain `pip install jetnet` works on Google Colab but fails on
+macOS/Python 3.14 because its `wasserstein` dependency tries to compile with
+OpenMP. The working local recipe (Python 3.12, no compiler needed — `wasserstein`
+is skipped entirely, FPD/KPD don't use it):
 
 ```bash
-pip install jetnet
+pip install --no-deps jetnet
+pip install "numpy<2" "scipy<1.14" numba energyflow tables h5py pandas awkward coffea pyyaml requests tqdm
 python -m pinnde_eval.validate_toys     # FPD/KPD now reported instead of "n/a"
 ```
 
@@ -183,17 +257,21 @@ Tina/
 │   ├── tier1.py        classifier AUC, histogram chi^2
 │   ├── tier2.py        FPD, KPD, per-feature Wasserstein
 │   ├── tier3.py        MMD, sliced Wasserstein (pure torch)
+│   ├── stability.py    metric stability vs sample size (null floor, resolvability)
+│   ├── local.py        local maps: MMD witness, classifier P(real|x), binned residuals
 │   ├── data.py         seeded GMM toys
 │   ├── validate_toys.py null / sensitivity / speed checks
 │   ├── DEVLOG.md       calibration record + chosen thresholds
 │   └── tests/
 ├── flow_matching/      conditional flow-matching generator
-│   ├── model.py        VelocityField (Fourier time embedding + GELU)
-│   ├── core.py         fm_loss, sample (Euler/Heun ODE)
+│   ├── model.py        VelocityField (Fourier time + condition embeddings, GELU)
+│   ├── core.py         fm_loss, sample (Euler/Heun ODE, optional condition)
 │   ├── train.py        train_flow_matching (Adam + cosine LR, optional monitoring)
 │   ├── demo.py         toy GMM demo, scored with pinnde_eval
+│   ├── demo_conditional.py  p(observables | energy) demo, scored per energy bin
 │   └── tests/
 ├── figures/            generated result figures
 ├── make_figures.py     reproduce the result figures
-└── make_flow_figure.py reproduce the velocity-field / trajectory figure
+├── make_flow_figure.py reproduce the velocity-field / trajectory figure
+└── make_local_figure.py reproduce the local-discrepancy demo figure
 ```

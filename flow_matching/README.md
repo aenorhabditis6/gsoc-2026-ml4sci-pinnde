@@ -22,18 +22,24 @@ flow-matching / Lipman convention). The diffusion / score track labels it the
 other way (`t=0` data → `t=1` noise); the two are related by `t → 1−t`.
 
 ## Files
-- `model.py` — `VelocityField`: MLP with a Fourier-feature time embedding + GELU.
-- `core.py` — `fm_loss` (the objective) and `sample` (Euler/Heun ODE solver).
+- `model.py` — `VelocityField`: MLP with Fourier-feature time **and condition**
+  embeddings + GELU.
+- `core.py` — `fm_loss` (the objective) and `sample` (Euler/Heun ODE solver),
+  both condition-aware.
 - `train.py` — `train_flow_matching`: Adam + cosine LR decay; optional Tier-3
   (`pinnde_eval`) monitoring during training.
 - `demo.py` — trains on a 2-D GMM toy and reports `pinnde_eval` metrics.
+- `demo_conditional.py` — trains `p(observables | energy)` on the calo-flavoured
+  shower toy and scores it pooled, per energy bin, and at fixed conditions.
+- `_utils.py` — seeding and array helpers.
 - `tests/` — edge-case + "it actually learns" tests.
 
 ## Run
 
 ```bash
 cd Tina
-python -m flow_matching.demo        # train on a GMM, score vs truth
+python -m flow_matching.demo              # train on a 2-D GMM, score vs truth
+python -m flow_matching.demo_conditional  # train p(observables | energy)
 pytest flow_matching/tests -q
 ```
 
@@ -43,14 +49,54 @@ model, history = train_flow_matching(data, dim=2)   # data: (N, d) tensor
 gen = sample(model, n=5000, dim=2)                  # integrate noise -> data
 ```
 
-## Toy result (2-D GMM, k=6, 4000 steps)
-Generated-vs-truth lands near the statistical null floor: **SWD 0.066** (floor
-≈0.049 from two true draws), **MMD ~1e-4**, **AUC 0.54 ± 0.003** (0.5 = perfect).
-Cosine LR decay was needed — without it the samples drifted off the data
-manifold late in training (final SWD 0.166 → 0.066 with decay).
+## Conditional generation
+
+The actual calorimeter target is the *conditional* density `p(shower | E_inc)`,
+not a marginal. Pass a per-sample condition and the field becomes
+`v_theta(x, t, c)`; the condition enters as its raw value plus a low-frequency
+Fourier embedding.
+
+```python
+model, history = train_flow_matching(x, dim=3, cond=c)   # c: (N, 1)
+
+gen = sample(model, n=5000, dim=3, cond=0.9)      # everyone at c = 0.9
+gen = sample(model, n=5000, dim=3, cond=c_eval)   # matched per-row conditions
+```
+
+`demo_conditional.py` scores the result three ways, strictest last:
+
+1. **pooled** over all energies — the number a marginal model could also fake;
+2. **per energy bin** via `evaluate_by_condition` — a bad bin cannot hide inside
+   a good average;
+3. **at fixed unseen conditions** `c* ∈ {0.1, 0.5, 0.9}` against fresh truth
+   draws at exactly those `c*` — the interpolation test a lookup table fails.
+
+## Results
+
+**2-D GMM, k=6, 4000 steps (unconditional).** Generated-vs-truth lands near the
+statistical null floor: **SWD 0.066** (floor ≈0.049 from two true draws),
+**MMD ~1e-4**, **AUC 0.54 ± 0.003** (0.5 = perfect). Cosine LR decay was needed —
+without it the samples drifted off the data manifold late in training
+(final SWD 0.166 → 0.066 with decay).
+
+**Shower toy, 40k events, 6000 steps (conditional).** Pooled: **SWD 0.0056**,
+**MMD −8.4e-05**, **W1 0.0058**, FPD/KPD consistent with zero. **AUC 0.565 ±
+0.007** — the transport distances sit at the floor but the classifier still
+finds a residual imperfection, and χ² localizes it to the skewed
+sampling-fraction feature (2.4 vs ~1.1–1.4 on the others): the flow slightly
+under-models the gamma tail. This is kept as an honest example of *why* AUC
+stays in the suite even when the distances look perfect.
+
+Per energy bin the pooled number hides a trend — AUC rises 0.512 / 0.551 /
+0.561 / 0.617 across the four condition quartiles, so the high-energy slice is
+the weakest (narrow distributions make the same absolute error more visible).
+At fixed `c*`, per-feature means track truth to ≲0.5%.
+
+Full numbers and the calibration behind them: `../pinnde_eval/DEVLOG.md` §10.
 
 ## Next
 Ablate the architecture upgrades one at a time, scoring each with `pinnde_eval`:
 adaptive collocation (non-uniform `t` sampling), richer Fourier features, then a
-physics-informed continuity-equation residual. Real calorimeter data is deferred
-(plugs in via `evaluate(..., features_fn=...)`).
+physics-informed continuity-equation residual. The open modelling gap is the
+gamma tail on the skewed observable (see AUC above). Real calorimeter data is
+deferred and plugs in via `evaluate(..., features_fn=...)`.

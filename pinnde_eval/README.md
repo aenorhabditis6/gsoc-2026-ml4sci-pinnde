@@ -11,12 +11,21 @@ tensors **or** numpy arrays of shape `(N, d)`; conversion is internal.
 ## Install
 
 ```bash
-pip install torch numpy scipy scikit-learn jetnet matplotlib
+pip install torch numpy scipy scikit-learn matplotlib pytest
+pip install jetnet          # OPTIONAL -- only Tier-2 FPD/KPD need it
 ```
 
 Runs on Google Colab (CPU or single GPU). `jetnet` provides the peer-reviewed
 FPD/KPD reference implementations; if it is missing, every other metric still
-runs and FPD/KPD come back as `None`.
+runs and FPD/KPD come back as `None`. A plain `pip install jetnet` works on
+Colab but fails on macOS (its `wasserstein` dependency wants an OpenMP
+compiler); the local no-compiler recipe is in the top-level `Tina/README.md`.
+
+> **Threading gotcha.** If numpy links a threaded OpenBLAS (numpy 1.26 wheels on
+> macOS), run everything with `OPENBLAS_NUM_THREADS=1`. The Tier-1 classifier
+> issues thousands of tiny matrix multiplies, and OpenBLAS's thread busy-wait
+> turns a 9-second `evaluate()` into >30 minutes of spinning that looks like a
+> hang. Colab's default numpy is unaffected.
 
 The package is not pip-installed; put the folder that contains `pinnde_eval/` on
 the path, e.g. in Colab after cloning the repo:
@@ -59,7 +68,7 @@ report(results)
 #            mmd : 0.0021
 #            swd : 0.013
 #            auc : 0.52 +/- 0.01
-#       chi2_mean : 1.08
+#      chi2_mean : 1.08
 #        w1_mean : 0.046
 #            fpd : 0.00031 +/- 4e-05
 #            kpd : ...
@@ -69,6 +78,10 @@ results = evaluate(real, gen, tier="monitor")   # {"mmd": ..., "swd": ...}
 loss_monitor = mmd(real_batch, gen_batch)        # or call directly
 ```
 
+**Reading the numbers:** AUC → 0.5, χ² → 1, and MMD/SWD/W1/FPD/KPD → their null
+floor all mean *good*. See the stability section below for why the comparison is
+against the floor and not against zero.
+
 ### Conditional evaluation
 
 Use `evaluate_by_condition` when a global score may hide failures in one class,
@@ -77,9 +90,12 @@ energy range, or detector region. Pass one label/bin per sample:
 ```python
 from pinnde_eval import evaluate_by_condition
 
-by_energy = evaluate_by_condition(real, gen, real_energy_bin, gen_energy_bin,
-                                  tier="monitor")
+# real and gen share the same per-sample labels (the usual case)
+by_energy = evaluate_by_condition(real, gen, energy_bin, tier="monitor")
 print(by_energy["20-50 GeV"]["swd"])
+
+# or give gen its own labels when the two sets are binned separately
+by_energy = evaluate_by_condition(real, gen, real_energy_bin, gen_energy_bin)
 ```
 
 ### Calorimeter hook (deferred, no API change needed)
@@ -92,6 +108,58 @@ energies / shower widths (or a wrapper around the official CaloChallenge
 ```python
 results = evaluate(real, gen, tier="full", features_fn=shower_observables)
 ```
+
+## How many samples do you need? (`stability.py`)
+
+Every metric has a finite-N **null floor** — the non-zero value a *perfect*
+generator still shows at that sample size — and a finite-N **spread**. The
+stability study measures both, then reports the smallest N at which a fixed
+perturbation separates from the floor by `z_min` combined error bars.
+
+```python
+from pinnde_eval import stability_study, separation_z, min_resolvable_n
+
+study = stability_study(n_grid=(250, 1000, 4000), kind="mean", eps=0.2)
+separation_z(study)       # {metric: z per N}  -- z >= 2 means "resolvable"
+min_resolvable_n(study)   # {metric: smallest N that resolves it, or None}
+```
+
+```bash
+python -m pinnde_eval.stability     # full table + ../figures/stability.png
+```
+
+**The rule this buys you: never compare a metric value against zero — compare it
+against the null floor at your N.** SWD/W1 floors are pure finite-N artifacts
+falling as roughly N^(−1/2), so "SWD = 0.05" is *excellent* at N=8000 and
+*terrible* at N=500. The measured floors are tabulated in `DEVLOG.md` §8.
+
+## Where does the generator fail? (`local.py`)
+
+A single global score hides a localized failure — a dropped or shifted mode
+barely moves SWD. Three complementary maps localize the disagreement, all
+sharing one sign convention: **positive = real over-dense (the generator misses
+that region), negative = generated over-dense (it hallucinates there).**
+
+| Function | Question it answers | How to read it |
+|---|---|---|
+| `mmd_witness(real, gen, points)` | where is the probability mass wrong? | the RBF-MMD witness at each query point; same kernel/bandwidth as `tier3.mmd`, so it decomposes the global monitor in space |
+| `classifier_discrepancy(real, gen)` | which samples give the generator away? | out-of-fold P(real\|x) per sample plus the oof AUC; sort `gen` ascending to rank the worst fakes |
+| `binned_residual_map(real, gen, features=(0, 1))` | which histogram bins disagree? | per-bin residual, ~N(0,1) under the null, so \|r\| > 3 is a genuine local failure; this is the Tier-1 χ² decomposed bin by bin |
+
+```python
+from pinnde_eval import mmd_witness, classifier_discrepancy, binned_residual_map
+
+w = mmd_witness(real, gen)                    # defaults to the pooled sample
+p_real, p_gen, oof_auc = classifier_discrepancy(real, gen)
+residuals, edges = binned_residual_map(real, gen, features=(0, 1))
+```
+
+```bash
+python ../make_local_figure.py      # demo: all three light up on a broken generator
+```
+
+All three run in feature space, so for showers they apply to any observable pair
+(layer energy vs. width, …) through the same `features_fn` hook.
 
 ## Reproducibility
 
@@ -110,6 +178,10 @@ toys (run `python -m pinnde_eval.validate_toys`):
    component) makes every metric grow with the perturbation size.
 3. **Speed check** — Tier-3 monitors run in well under a second on 5k samples.
 
+Every threshold was calibrated against a *measured* noise floor rather than
+chosen by preference. `DEVLOG.md` records each one, the number behind it, and
+the baseline table to bisect against if a change moves a metric.
+
 ## Tests
 
 ```bash
@@ -119,7 +191,18 @@ pytest pinnde_eval/tests -q
 ## Files
 
 - `tier1.py`, `tier2.py`, `tier3.py` — the metrics, grouped by tier.
-- `evaluate.py` — the `evaluate()` entry point, `report()`, `plot_histograms()`.
-- `data.py` — seeded GMM generators (mirror `flow_de/gendata.py`) for validation.
+- `evaluate.py` — the `evaluate()` entry point, `evaluate_by_condition()`,
+  `report()`, `plot_histograms()`.
+- `stability.py` — metric behaviour vs. sample size: null floor, spread,
+  separation z, minimum resolvable N. Runnable as a module.
+- `local.py` — local discrepancy maps: MMD witness, out-of-fold P(real|x),
+  binned residuals.
+- `data.py` — seeded toy generators: `gmm_params` / `sample_gmm` /
+  `perturb_params` (Gaussian mixtures for validation) and `sample_shower_toy`
+  (a calo-flavoured conditional toy: sampling fraction, depth, width vs.
+  normalized log-energy).
 - `validate_toys.py` — null / sensitivity / speed checks.
+- `_utils.py` — array conversion, pair checking, seeding helpers.
+- `DEVLOG.md` — calibration record: every threshold, the measurement behind it,
+  and the baseline numbers used to catch regressions.
 - `tests/` — pytest edge-case tests.
