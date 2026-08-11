@@ -25,8 +25,12 @@ Two study/diagnostic layers sit on top of the metrics:
 
 from .evaluate import evaluate, evaluate_by_condition, report, plot_histograms
 from .local import binned_residual_map, classifier_discrepancy, mmd_witness
+from .observables import (Geometry, GEOMETRIES, READOUT_THRESHOLD_MEV,
+                          layer_energies, load_calochallenge, radial_profile,
+                          shower_features_fn, shower_observables,
+                          voxel_energy_spectrum)
 from .stability import min_resolvable_n, separation_z, stability_study
-from .tier1 import classifier_two_sample_test, histogram_chi2
+from .tier1 import classifier_two_sample_test, histogram_chi2, separation_power
 from .tier2 import fpd, kpd, wasserstein_per_feature
 from .tier3 import mmd, swd, median_bandwidth
 
@@ -37,6 +41,7 @@ __all__ = [
     "plot_histograms",
     "classifier_two_sample_test",
     "histogram_chi2",
+    "separation_power",
     "fpd",
     "kpd",
     "wasserstein_per_feature",
@@ -49,4 +54,13 @@ __all__ = [
     "mmd_witness",
     "classifier_discrepancy",
     "binned_residual_map",
+    "Geometry",
+    "GEOMETRIES",
+    "READOUT_THRESHOLD_MEV",
+    "shower_observables",
+    "shower_features_fn",
+    "layer_energies",
+    "radial_profile",
+    "voxel_energy_spectrum",
+    "load_calochallenge",
 ]

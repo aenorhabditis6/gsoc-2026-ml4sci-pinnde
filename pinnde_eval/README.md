@@ -42,6 +42,7 @@ import pinnde_eval
 |------|--------|-------------------|------|
 | 1 | `classifier_two_sample_test` | Test AUC (mean ± std over k retrainings) of an MLP separating real vs generated. **0.5 = indistinguishable.** | medium |
 | 1 | `histogram_chi2` | Reduced χ² per feature between real/generated 1D histograms. **≈1 = agree within stats.** | cheap |
+| 1 | `separation_power` | CaloChallenge separation power per feature, in [0, 1]. **0 = identical shapes.** Has a strong finite-N floor — see below. | cheap |
 | 2 | `fpd` | Fréchet physics distance (2-Wasserstein between Gaussian fits) with infinite-sample extrapolation → `(value, error)`. | medium |
 | 2 | `kpd` | Kernel physics distance (polynomial-kernel MMD) with batched uncertainty → `(median, error)`. | medium |
 | 2 | `wasserstein_per_feature` | 1D Wasserstein-1 distance per coordinate (vector + mean). | cheap |
@@ -161,6 +162,78 @@ python ../make_local_figure.py      # demo: all three light up on a broken gener
 All three run in feature space, so for showers they apply to any observable pair
 (layer energy vs. width, …) through the same `features_fn` hook.
 
+## Real calorimeter showers (`observables.py`)
+
+`observables.py` is the `features_fn` for CaloChallenge data: it turns an
+`(N, n_voxels)` array of energy deposits into the high-level observables
+physicists judge showers by — `E_tot`, sampling fraction, longitudinal centre
+of gravity and width, transverse centre of gravity and width, and sparsity.
+
+```python
+from pinnde_eval import load_calochallenge, shower_observables, shower_features_fn, evaluate
+
+showers, e_inc = load_calochallenge("dataset_2_1.hdf5", n=8000)   # reads a slice
+feats, names = shower_observables(showers, e_inc, geometry="ds2")
+
+# or plug straight into evaluate
+fn = shower_features_fn(e_inc, geometry="ds2")
+res = evaluate(real_showers, gen_showers, features_fn=fn, standardize=True)
+```
+
+Get the data from [Zenodo](https://zenodo.org/records/6366271) (ds2, electrons,
+two files of 100k showers) and put it in `Tina/`. It is gitignored — the files
+are ~1.4 GB each and GitHub rejects blobs over 100 MB.
+
+**Two things that will bite you:**
+
+*Voxel ordering is `(layer, alpha, r)`.* ds2's 6480 voxels are 45 layers × 16
+angular × 9 radial. The dataset description reads "9 radial and 16 angular",
+which invites `reshape(45, 9, 16)` — that is wrong, and it leaves `<z>` looking
+plausible while silently corrupting `sigma_r`. The convention here was
+determined empirically (the radial axis must fall off monotonically, the
+angular axis must be flat) and is asserted in the tests. See `DEVLOG.md` §11.
+
+*Pass `standardize=True` for real observables.* `E_tot` is tens of thousands of
+MeV, `sparsity` is in [0, 1]. SWD and W1 are scale-dependent, so without
+standardization they measure `E_tot` and nothing else — on the Geant4 null,
+`swd` reads 1128 unstandardized and 0.022 standardized. `evaluate` warns when
+feature scales span more than 100×.
+
+### Validate on real data
+
+```bash
+python -m pinnde_eval.validate_calo     # needs both ds2 files in Tina/
+```
+
+`dataset_2_1` and `dataset_2_2` are independent Geant4 draws, so comparing them
+is a true null — every metric must sit at its floor. That floor is what a
+*perfect* generator looks like on real showers (N=8000, standardized):
+
+```
+mmd  -2.3e-05    swd 0.0222    auc 0.4971 +/- 0.0101
+chi2  1.096      w1  0.0221    sep 0.0030    fpd 0.0002 +/- 1.1e-04
+```
+
+## Separation power and its floor
+
+`separation_power` is the CaloChallenge's own per-observable statistic,
+`S = ½ Σ (p−q)²/(p+q)` on normalized histograms — bounded in [0, 1], **0 =
+identical, 1 = no overlap**. It is what CaloChallenge submissions report, so
+including it makes results here directly comparable to the published table.
+
+It also has a finite-N floor, and a sharp one:
+
+```
+S_floor  ≈  n_occupied_bins / (2N)
+```
+
+Measured on independent Geant4 draws, the floor falls as **1/N** (not the
+1/√N that SWD and W1 follow) and is linear in the binning. At N=500 with 50
+bins a *perfect* generator scores 0.044 — larger than many published
+per-observable separation powers. So a bare S is not interpretable: quote it
+against `n_bins/(2N)`, and never compare two values computed at different N or
+binning. Derivation and the measured table are in `DEVLOG.md` §12.
+
 ## Reproducibility
 
 Everything stochastic (classifier splits/inits, projections, bandwidth
@@ -192,7 +265,11 @@ pytest pinnde_eval/tests -q
 
 - `tier1.py`, `tier2.py`, `tier3.py` — the metrics, grouped by tier.
 - `evaluate.py` — the `evaluate()` entry point, `evaluate_by_condition()`,
-  `report()`, `plot_histograms()`.
+  `report()`, `plot_histograms()`, and the shared standardization.
+- `observables.py` — CaloChallenge shower observables, dataset geometries, and
+  the HDF5 loader. This is the `features_fn` for real data.
+- `validate_calo.py` — null test and separation-power floor law on real Geant4
+  showers.
 - `stability.py` — metric behaviour vs. sample size: null floor, spread,
   separation z, minimum resolvable N. Runnable as a module.
 - `local.py` — local discrepancy maps: MMD witness, out-of-fold P(real|x),

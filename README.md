@@ -52,7 +52,7 @@ One entry point returns a flat dict of metrics, grouped in three tiers:
 |------|---------------------|---------|
 | **Live monitors** | *Is it converging?* (cheap, run during training) | `mmd`, `swd` |
 | **Distribution distances** | *How far apart, with error bars?* | `fpd`, `kpd`, `wasserstein_per_feature` |
-| **Standard tests** | *Can you even tell real from generated?* | `classifier_two_sample_test` (AUC), `histogram_chi2` |
+| **Standard tests** | *Can you even tell real from generated?* | `classifier_two_sample_test` (AUC), `histogram_chi2`, `separation_power` |
 
 ```python
 import numpy as np
@@ -94,14 +94,38 @@ by_bin = evaluate_by_condition(real, gen, energy_bin_labels, tier="monitor")
 print(by_bin["20-50 GeV"]["swd"])
 ```
 
-### Calorimeter hook (no API change needed)
+### Real calorimeter showers
 `evaluate(..., features_fn=...)` maps raw samples → high-level features *before* any
-metric runs. For toys the features are the raw coordinates; for the calorimeter,
-pass a function that returns shower observables (layer energies, widths, …):
+metric runs. `pinnde_eval.observables` supplies that function for CaloChallenge
+voxelised showers:
 
 ```python
-res = evaluate(real, gen, tier="full", features_fn=shower_observables)
+from pinnde_eval import load_calochallenge, shower_features_fn, evaluate
+
+showers, e_inc = load_calochallenge("dataset_2_1.hdf5", n=8000)
+fn = shower_features_fn(e_inc, geometry="ds2")
+res = evaluate(real_showers, gen_showers, features_fn=fn, standardize=True)
 ```
+
+Get ds2 (electrons) from [Zenodo](https://zenodo.org/records/6366271) and drop
+both files in `Tina/`; they are gitignored (~1.4 GB each, over GitHub's limit).
+
+Two traps, both documented in `pinnde_eval/DEVLOG.md` §11:
+
+- **Voxel order is `(layer, alpha, r)`.** ds2's 6480 = 45 × 16 angular × 9
+  radial. The natural-looking `reshape(45, 9, 16)` is wrong and silently
+  corrupts `sigma_r` while leaving `<z>` plausible. The tests assert the
+  convention.
+- **Pass `standardize=True` for observables in mixed units.** SWD and W1 are
+  scale-dependent; on the Geant4 null `swd` reads 1128 unstandardized against
+  0.022 standardized, because `E_tot` in MeV swamps `sparsity` in [0,1].
+
+```bash
+python -m pinnde_eval.validate_calo    # null test + separation-power floor law
+```
+
+Two independent Geant4 draws give the floor a *perfect* generator hits
+(N=8000): `auc 0.4971 ± 0.0101 · chi2 1.096 · swd 0.0222 · sep 0.0030`.
 
 ### Stability vs. sample size — *how many samples do I need to trust a number?*
 Every metric has a finite-N **null floor** (the value a *perfect* generator shows)
@@ -206,8 +230,12 @@ exactly those c* (the interpolation test a marginal model would fail).
 ## Tests
 
 ```bash
-python -m pytest pinnde_eval/tests flow_matching/tests -q     # 45 tests
+python -m pytest pinnde_eval/tests flow_matching/tests -q     # 71 tests
 ```
+
+The CaloChallenge observable tests run on synthetic voxel grids with
+analytically known answers, so the suite needs no downloaded data; the one
+real-data integration test skips itself when the ds2 file is absent.
 
 ## Reproduce the figures (in `figures/`)
 ```bash
@@ -259,8 +287,10 @@ Tina/
 │   ├── tier3.py        MMD, sliced Wasserstein (pure torch)
 │   ├── stability.py    metric stability vs sample size (null floor, resolvability)
 │   ├── local.py        local maps: MMD witness, classifier P(real|x), binned residuals
+│   ├── observables.py  CaloChallenge shower observables + HDF5 loader (features_fn)
 │   ├── data.py         seeded GMM toys
 │   ├── validate_toys.py null / sensitivity / speed checks
+│   ├── validate_calo.py real-data null test + separation-power floor law
 │   ├── DEVLOG.md       calibration record + chosen thresholds
 │   └── tests/
 ├── flow_matching/      conditional flow-matching generator

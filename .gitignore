@@ -3,3 +3,9 @@ __pycache__/
 .pytest_cache/
 .DS_Store
 .venv/
+
+# CaloChallenge data -- multi-GB, download from Zenodo, never commit.
+# ds2: https://zenodo.org/records/6366271
+*.hdf5
+*.h5
+data/

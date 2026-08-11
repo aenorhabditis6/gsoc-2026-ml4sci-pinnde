@@ -295,3 +295,118 @@ Results (2026-07 venv, seed 0):
 - Fixed-condition interpolation at c* ∈ {0.1, 0.5, 0.9} vs fresh truth draws
   at exactly c*: per-feature means track to ≲0.5% (e.g. depth 3.705→3.700 at
   c*=0.5); swd ≈ 0.006–0.010.
+
+## 11. Real CaloChallenge data (ds2) — the `features_fn` in anger
+
+`observables.py` is the `features_fn` for real showers. Data: CaloChallenge
+ds2 (electrons), <https://zenodo.org/records/6366271>, two files of 100k
+showers, `showers` (N, 6480) float64 MeV and `incident_energies` (N, 1) MeV.
+Both files are ~1.36 GB, gitignored, and must stay that way — GitHub rejects
+blobs over 100 MB.
+
+**Voxel flatten order is `(layer, alpha, r)`, determined empirically, not
+assumed.** 6480 = 45 layers × 16 angular × 9 radial. The dataset description
+reads "9 radial and 16 angular", which invites `reshape(45, 9, 16)` — that is
+wrong. Measured mean profiles over 2000 showers:
+
+```
+reshape(45, 9, 16):  the 9-axis is [1.00 0.99 0.97 0.89 0.70 1.00 0.98 0.95 0.63]
+                     -- a sawtooth, physically impossible
+reshape(45, 16, 9):  the 9-axis is [1.00 0.28 0.13 0.08 0.06 0.04 0.03 0.03 0.02]
+                     -- monotonic ~50x falloff = radius
+                     the 16-axis is flat to 0.3% = azimuthal symmetry
+```
+
+Getting this backwards leaves `<z>` looking plausible while silently
+corrupting `sigma_r`. `test_observables.py` pins it two ways: a synthetic
+shower spread across two radii must give `r_width > 0` while one spread across
+two angles gives 0, and (when the file is present) the real radial profile
+must be monotonically decreasing with a flat angular profile.
+
+Sanity numbers on the real file (first 2000 showers): E_inc 1.0–992 GeV
+log-uniform; 76.33% of voxels exactly zero, and *exactly* that fraction is
+below 15.15 keV, so **the readout threshold is already applied to the
+reference data**; longitudinal profile peaks at layer 11.
+
+The extractor is validated against physics rather than a golden file:
+`corr(log E_inc, sparsity) = −0.94` (more energy lights more voxels) and
+`corr(log E_inc, <z>) = +0.87` (shower maximum deepens as log E). Both are
+asserted with slack thresholds.
+
+### The bug real data found: SWD and W1 need standardization
+
+The toys hid this because every toy coordinate was unit-scale. Shower
+observables are not: `E_tot` is tens of thousands of MeV, `sparsity` is in
+[0, 1]. On the Geant4-vs-Geant4 null at N=8000:
+
+```
+                        without standardize      with standardize
+swd                     1128                     0.0222
+w1_mean                 521.2                    0.0221
+w1_per_feature          [3648, 0.0021, 0.095, ...]   [0.021, 0.019, 0.034, ...]
+```
+
+SWD and W1 are scale-dependent, so they measured `E_tot` and nothing else.
+MMD survives (median-heuristic bandwidth adapts to scale), AUC survives (the
+classifier standardizes internally), χ² and separation power survive (binned
+per feature). `evaluate(..., standardize=True)` z-scores both samples using
+**the real sample's** mean and width — one shared scaler, because fitting
+separately would erase the mean differences the metrics exist to detect.
+Default is `False` so the §7 toy baselines stay reproducible, and a warning
+fires when feature scales span more than 100×.
+
+### Real-data null floor (the reference table for shower work)
+
+`python -m pinnde_eval.validate_calo`, ds2_1 vs ds2_2 (independent Geant4
+draws), N=8000, 7 observables, standardized:
+
+```
+mmd  : -2.348e-05          auc  : 0.4971 +/- 0.01005
+swd  : 0.02221             chi2 : [1.223, 1.412, 1.187, 0.859, 1.06, 0.910, 1.022] m 1.096
+w1   : 0.02213             sep  : [0.0037, 0.0034, 0.0024, 0.0025, 0.0030, 0.0027, 0.0031] m 0.0030
+fpd  : 0.0002 +/- 1.1e-04  kpd  : 6.4e-06 +/- 6.0e-05
+```
+
+> These are the numbers a *perfect* generator produces on real showers at
+> N=8000. Judge any model against this row, not against zero.
+
+## 12. Separation power and its finite-N floor
+
+`tier1.separation_power` implements the CaloChallenge statistic
+S = ½ Σ (p−q)²/(p+q) on normalized histograms, bounded in [0, 1], 0 = identical
+shapes, 1 = no overlap. It is what CaloChallenge submissions report, so having
+it makes results here directly comparable to the published table.
+
+**S has a finite-N null floor, and it is not small.** Two independent Geant4
+draws (bins=50, mean over 7 observables, up to 4 repeats per N):
+
+```
+     N    sep_mean     std      n_bins/(2N)   ratio
+   500    0.04401    0.00156      0.05000     0.88
+  1000    0.02115    0.00130      0.02500     0.85
+  2000    0.01057    0.00093      0.01250     0.85
+  4000    0.00565    0.00057      0.00625     0.90
+  8000    0.00319    0.00020      0.00313     1.02
+ 16000    0.00171    0.00000      0.00156     1.09
+```
+
+The floor falls 25.7× over a 32× increase in N — **1/N, not the 1/√N that
+SWD and W1 follow** (§8). The law is derivable: for two same-distribution
+histograms, E[(p̂−q̂)²] ≈ 2p/N and the denominator is ≈ 2p, so each occupied
+bin contributes ≈ 1/(2N) and
+
+    S_floor ≈ n_occupied_bins / (2N)
+
+Measured ratios sit at 0.85–1.09, drifting below 1 for fine binning because
+empty tail bins contribute nothing (the *occupied* count is what matters, not
+the nominal one). The floor is correspondingly linear in the binning at fixed
+N — measured at N=4000: 0.00286 / 0.00508 / 0.00996 / 0.01851 for
+25 / 50 / 100 / 200 bins, close to doubling each time.
+
+**The practical consequence, and the reason this is worth reporting.** The
+CaloChallenge quotes separation powers as bare numbers. Two submissions
+evaluated at different sample sizes or with different binning are not
+comparable, and a small S is not evidence of a good model unless it is below
+`n_bins/(2N)`. At N=500 with 50 bins, a *perfect* generator scores 0.044 —
+larger than many published per-observable separation powers. Any S reported
+here is quoted alongside its floor.

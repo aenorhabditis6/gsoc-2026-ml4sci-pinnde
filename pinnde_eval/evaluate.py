@@ -14,20 +14,50 @@ changing this API.
 import numpy as np
 
 from ._utils import check_pair
-from .tier1 import classifier_two_sample_test, histogram_chi2
+from .tier1 import classifier_two_sample_test, histogram_chi2, separation_power
 from .tier2 import fpd, kpd, wasserstein_per_feature
 from .tier3 import mmd, swd
 
 
-def evaluate(real, gen, tier="full", features_fn=None,
+def _standardize_pair(real, gen):
+    """z-score both samples using the *real* sample's mean and scale.
+
+    One shared scaler, fit on real only: fitting separately would erase the
+    very mean/width differences the metrics exist to detect.
+    """
+    mean = real.mean(axis=0)
+    scale = real.std(axis=0)
+    scale = np.where(scale > 0, scale, 1.0)
+    return (real - mean) / scale, (gen - mean) / scale
+
+
+def _warn_if_scales_heterogeneous(real, ratio=100.0):
+    """Warn when SWD/W1 would be dominated by one large-scale feature."""
+    scale = real.std(axis=0)
+    positive = scale[scale > 0]
+    if positive.size and positive.max() / positive.min() > ratio:
+        print(f"[pinnde_eval] feature scales span "
+              f"{positive.max() / positive.min():.3g}x -- swd and w1 are "
+              f"scale-dependent and will be dominated by the largest feature. "
+              f"Pass standardize=True for physics observables in mixed units.")
+
+
+def evaluate(real, gen, tier="full", features_fn=None, standardize=False,
              bins=50, n_classifier=5, n_projections=128,
              device="cpu", seed=0, fpd_kwargs=None, kpd_kwargs=None):
     """Run the metric suite and return a flat results dict.
 
     Keys: ``mmd``, ``swd`` (Tier 3, always); plus for ``tier="full"`` ``auc``
-    (mean, std), ``chi2_per_feature``, ``chi2_mean``, ``w1_per_feature``,
-    ``w1_mean``, ``fpd`` (value, error), ``kpd`` (value, error). FPD/KPD are
-    ``None`` if jetnet is not installed.
+    (mean, std), ``chi2_per_feature``, ``chi2_mean``, ``sep_per_feature``,
+    ``sep_mean``, ``w1_per_feature``, ``w1_mean``, ``fpd`` (value, error),
+    ``kpd`` (value, error). FPD/KPD are ``None`` if jetnet is not installed.
+
+    ``standardize`` z-scores both samples using the real sample's mean and
+    width. **Use it whenever the features carry different units** -- shower
+    observables mix MeV-scale energies with dimensionless sparsity, and
+    without it ``swd`` and ``w1_mean`` measure little except the largest
+    feature. It is off by default so the toy baselines in DEVLOG section 7
+    stay reproducible; a warning fires when the scales look heterogeneous.
     """
     if tier not in ("full", "monitor"):
         raise ValueError(f"tier must be 'full' or 'monitor', got {tier!r}")
@@ -35,6 +65,10 @@ def evaluate(real, gen, tier="full", features_fn=None,
     real, gen = check_pair(real, gen)
     if features_fn is not None:
         real, gen = check_pair(features_fn(real), features_fn(gen))
+    if standardize:
+        real, gen = _standardize_pair(real, gen)
+    else:
+        _warn_if_scales_heterogeneous(real)
 
     results = {}
     # Tier 3 runs for both monitor and full evaluations.
@@ -48,6 +82,9 @@ def evaluate(real, gen, tier="full", features_fn=None,
     chi2 = histogram_chi2(real, gen, bins=bins)
     results["chi2_per_feature"] = chi2
     results["chi2_mean"] = float(np.nanmean(chi2))
+    sep = separation_power(real, gen, bins=bins)
+    results["sep_per_feature"] = sep
+    results["sep_mean"] = float(np.nanmean(sep))
 
     # Tier 2
     w1 = wasserstein_per_feature(real, gen)
