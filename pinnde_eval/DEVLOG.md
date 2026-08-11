@@ -410,3 +410,89 @@ comparable, and a small S is not evidence of a good model unless it is below
 `n_bins/(2N)`. At N=500 with 50 bins, a *perfect* generator scores 0.044 —
 larger than many published per-observable separation powers. Any S reported
 here is quoted alongside its floor.
+
+## 13. Conditional flow matching on real ds2 (`flow_matching.demo_calo`)
+
+The first time our own generator meets real Geant4 data. Learns
+p(7 shower observables | E_inc) from ds2_1 (100k events, 12k steps, ≈5 min
+CPU) and is scored against **ds2_2, which it never sees**. `E_tot` spans three
+decades so it is modelled in log space; everything is then z-scored with
+training statistics and inverted after sampling.
+
+### Pooled: indistinguishable from Geant4
+
+```
+             model      floor (§11)
+auc          0.5048     0.4971        (+0.0048 from 0.5)
+chi2_mean    1.1178     1.0960        1.0x
+swd          0.0168     0.0222        0.8x
+w1_mean      0.0147     0.0221        0.7x
+sep_mean     0.0032     0.0030        1.1x
+fpd          1.5e-04 +/- 8.3e-05
+```
+
+**The 0.8x and 0.7x are not "better than Geant4."** The §11 floor was measured
+between two independent Geant4 draws whose incident energies were sampled
+*separately*; the model generates at the evaluation set's own energies and so
+avoids that extra sampling variance. The floor is mildly generous in this
+comparison. The honest reading is "indistinguishable at N=8000", not "better".
+
+### Per energy bin: the pooled number hides a large failure
+
+```
+energy bin      n      swd      auc              sep
+E 0-25%      2001   0.0474   0.787 +/- 0.010   0.01266
+E 25-50%     1967   0.0465   0.573 +/- 0.016   0.01186
+E 50-75%     2030   0.0329   0.498 +/- 0.015   0.01159
+E 75-100%    2002   0.0338   0.527 +/- 0.018   0.00910
+```
+
+Pooled AUC is 0.5048 — at the floor. The lowest-energy quartile is **0.787**:
+trivially separable. A quarter of the data is badly modelled and the pooled
+number says nothing is wrong. This is the strongest argument yet for
+`evaluate_by_condition` being mandatory rather than optional.
+
+Note the trend is **opposite to the toy** (§10), where AUC *rose* with energy
+(0.512 → 0.617). On real showers it falls (0.787 → 0.527). The toy's smooth
+skewed observables get harder to match as the distribution narrows; real
+low-energy showers are sparse and nearly discrete (sparsity up to 0.998, only
+a handful of voxels lit), which a continuous flow in observable space handles
+badly. The toy was not predictive of where the real model fails — worth
+remembering before trusting any toy-derived conclusion.
+
+Per observable, `sparsity` is the worst (χ² 1.70, sep 1.7× floor) followed by
+`f_samp` (χ² 1.36) — the two bounded, most non-Gaussian quantities. Support
+violations are small though: at most 0.40% of generated samples fall outside
+the Geant4 range of any observable, so this is a distributional failure, not
+the flow wandering off the physical support.
+
+### Local maps must be run per condition
+
+Running the §9 maps pooled and then on the worst slice:
+
+```
+              oof AUC   confidently-fake gen   max |r|
+pooled         0.5044          0.8%              2.5
+E 0-25%        0.7872         32.3%              3.8
+```
+
+Pooled, every local diagnostic says the generator is fine — oof AUC at the
+floor, under 1% of generated samples confidently fake, and max |r| = 2.5,
+*below* the |r| > 3 threshold §9 calibrated for a genuine local disagreement.
+On the worst energy slice the same three maps light up: a third of generated
+samples are confidently fake and the residual map crosses the threshold, with
+the disagreement sitting in (sparsity, r_width).
+
+**The maps are blind to a conditional failure unless you condition first.**
+They localize in feature space, so a defect that exists only at low incident
+energy is diluted by three well-modelled quartiles. The working recipe is
+therefore: `evaluate_by_condition` to find the bad slice, *then* the local
+maps inside it. Either step alone would have missed this.
+
+### Open modelling gap
+
+Low-energy showers. The fix directions worth trying, cheapest first: model
+bounded observables through a logit transform so sparsity cannot be pushed
+against its ceiling; weight the training loss toward low `c`; or condition the
+Fourier embedding more finely where the density changes fastest. None attempted
+yet — recorded so the next run has a starting point.

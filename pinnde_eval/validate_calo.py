@@ -28,26 +28,8 @@ import os
 import numpy as np
 
 from .evaluate import evaluate, report
-from .observables import load_calochallenge, shower_observables
-from .tier1 import histogram_chi2, separation_power
-
-CHUNK = 5000
-
-
-def features_from_file(path, n, start=0, geometry="ds2"):
-    """Observables for ``n`` showers, read in chunks.
-
-    ds2 is float64, so 20k raw showers is about 1 GB; the observables are
-    7 numbers per shower. Reading in chunks keeps peak memory flat.
-    """
-    blocks, names = [], None
-    for s in range(start, start + n, CHUNK):
-        showers, e_inc = load_calochallenge(path, n=min(CHUNK, start + n - s),
-                                            start=s)
-        feats, names = shower_observables(showers, e_inc, geometry=geometry)
-        blocks.append(feats)
-        del showers
-    return np.vstack(blocks), names
+from .observables import observables_from_file
+from .tier1 import separation_power
 
 
 def null_test(a, b, names, n=8000, seed=0):
@@ -136,8 +118,8 @@ def main(n_load=20000, data_dir=None):
         )
 
     print(f"extracting observables from {n_load} showers in each file...")
-    a, names = features_from_file(paths[0], n_load)
-    b, _ = features_from_file(paths[1], n_load)
+    a, names, _ = observables_from_file(paths[0], n_load)
+    b, _, _ = observables_from_file(paths[1], n_load)
     print(f"  {a.shape[0]} x {a.shape[1]} observables: {', '.join(names)}\n")
 
     null_test(a, b, names)

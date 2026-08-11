@@ -225,6 +225,21 @@ It scores the model three ways, strictest last: pooled over all energies,
 **fixed unseen conditions** c* ∈ {0.1, 0.5, 0.9} against fresh truth draws at
 exactly those c* (the interpolation test a marginal model would fail).
 
+### On real CaloChallenge showers
+
+```bash
+python -m flow_matching.demo_calo    # needs both ds2 files in Tina/
+```
+
+Trains `p(shower observables | E_inc)` on `dataset_2_1` and scores it against
+the held-out `dataset_2_2` plus the measured Geant4 null floor. The result is
+the clearest argument in the project for per-condition evaluation: **pooled it
+is indistinguishable from Geant4** (AUC 0.5048 against a 0.4971 floor), while
+the **lowest energy quartile sits at AUC 0.787**. The local maps see nothing
+pooled (max |r| 2.5, below threshold) and light up on that slice (max |r| 3.8,
+32% of generated samples confidently fake). Details in
+`pinnde_eval/DEVLOG.md` §13.
+
 ---
 
 ## Tests
@@ -254,6 +269,7 @@ python -m pinnde_eval.stability   # metric stability vs sample size
 | `fm_scatter.png`, `fm_histograms.png` | generated vs. true (2-D GMM) |
 | `fm_flow.png` | the learned velocity field and noise→data trajectories |
 | `fm_conditional.png` | conditional FM tracking p(observables \| energy): means vs. c + per-bin histograms |
+| `fm_calo.png` | conditional FM on **real** ds2 showers: observable means vs. incident energy + marginals |
 
 ### Toy result (2-D GMM, 6 modes)
 Generated-vs-truth lands near the statistical floor:
@@ -298,7 +314,8 @@ Tina/
 │   ├── core.py         fm_loss, sample (Euler/Heun ODE, optional condition)
 │   ├── train.py        train_flow_matching (Adam + cosine LR, optional monitoring)
 │   ├── demo.py         toy GMM demo, scored with pinnde_eval
-│   ├── demo_conditional.py  p(observables | energy) demo, scored per energy bin
+│   ├── demo_conditional.py  p(observables | energy) toy demo, scored per energy bin
+│   ├── demo_calo.py    p(observables | E_inc) on real ds2, vs the Geant4 floor
 │   └── tests/
 ├── figures/            generated result figures
 ├── make_figures.py     reproduce the result figures

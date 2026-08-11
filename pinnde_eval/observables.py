@@ -141,6 +141,42 @@ def voxel_energy_spectrum(showers, geometry="ds2", threshold=0.0):
     return x[x > threshold]
 
 
+def per_layer_observables(showers, geometry="ds2", threshold=0.0):
+    """Per-layer observables, matching the official CaloChallenge definitions.
+
+    Returns ``(features, names)`` with four quantities for each layer, in
+    blocks: energy, sparsity, radial centre of energy, radial width. For ds2
+    that is 4 x 45 = 180 columns.
+
+    The official ``HighLevelFeatures`` class computes exactly these per layer
+    (``E_layers``, ``sparsity``, ``EC_r``, ``width_r``) using the same
+    energy-weighted RMS, so results here are comparable with published
+    CaloChallenge numbers. Its remaining per-layer features -- the centres and
+    widths in eta and phi -- need the detector eta/phi maps from ``binning.xml``
+    and are not reproduced here; ``sigma_r`` carries the transverse
+    information instead.
+
+    ``shower_observables`` gives the whole-shower versions of the same
+    quantities: coarser, but 7 numbers instead of 180.
+    """
+    geom = get_geometry(geometry)
+    x = to_numpy(showers).astype(np.float64)
+    if threshold > 0:
+        x = np.where(x > threshold, x, 0.0)
+    v = geom.reshape(x)                       # (N, layer, alpha, r)
+
+    layer_e = v.sum(axis=(2, 3))              # (N, n_layers)
+    sparsity = (v == 0).mean(axis=(2, 3))     # (N, n_layers)
+    radial_e = v.sum(axis=2)                  # (N, n_layers, n_r)
+    r_mean, r_width = _weighted_mean_and_width(radial_e, geom.r_centers, axis=2)
+
+    names = ([f"E_layer_{i}" for i in range(geom.n_layers)]
+             + [f"sparsity_layer_{i}" for i in range(geom.n_layers)]
+             + [f"r_mean_layer_{i}" for i in range(geom.n_layers)]
+             + [f"r_width_layer_{i}" for i in range(geom.n_layers)])
+    return np.hstack([layer_e, sparsity, r_mean, r_width]), names
+
+
 def shower_observables(showers, incident_energies, geometry="ds2",
                        include_layers=False, threshold=0.0):
     """High-level observables per shower. Returns ``(features, names)``.
@@ -183,7 +219,7 @@ def shower_observables(showers, incident_energies, geometry="ds2",
 
 
 def shower_features_fn(incident_energies, geometry="ds2", include_layers=False,
-                       threshold=0.0):
+                       per_layer=False, threshold=0.0):
     """Build a ``features_fn`` for ``evaluate`` bound to fixed conditions.
 
     ``evaluate`` applies one ``features_fn`` to both real and generated, so
@@ -191,13 +227,23 @@ def shower_features_fn(incident_energies, geometry="ds2", include_layers=False,
     incident energies (the usual conditional-generation comparison)::
 
         fn = shower_features_fn(e_inc, geometry="ds2")
-        results = evaluate(real_showers, gen_showers, features_fn=fn)
+        results = evaluate(real_showers, gen_showers, features_fn=fn,
+                           standardize=True)
+
+    ``per_layer=True`` appends the 4-per-layer block from
+    ``per_layer_observables``, giving the resolution published CaloChallenge
+    numbers are quoted at. Always pass ``standardize=True`` alongside it --
+    layer energies span orders of magnitude across the shower.
     """
     def features_fn(showers):
         feats, _ = shower_observables(showers, incident_energies,
                                       geometry=geometry,
                                       include_layers=include_layers,
                                       threshold=threshold)
+        if per_layer:
+            layer_feats, _ = per_layer_observables(showers, geometry=geometry,
+                                                   threshold=threshold)
+            feats = np.hstack([feats, layer_feats])
         return feats
     return features_fn
 
@@ -219,3 +265,28 @@ def load_calochallenge(path, n=None, start=0, dtype=np.float64):
         showers = f["showers"][start:stop].astype(dtype)
         e_inc = f["incident_energies"][start:stop].astype(dtype)
     return showers, e_inc.ravel()
+
+
+def observables_from_file(path, n, start=0, geometry="ds2", chunk=5000,
+                          per_layer=False, threshold=0.0):
+    """Observables for ``n`` showers, reading the file in chunks.
+
+    Returns ``(features, names, incident_energies)``. Raw ds2 is float64, so
+    100k showers is ~5 GB; the observables are a handful of numbers each.
+    Reading in chunks keeps peak memory at one chunk regardless of ``n``.
+    """
+    feat_blocks, e_blocks, names = [], [], None
+    for s in range(start, start + n, chunk):
+        showers, e_inc = load_calochallenge(path, n=min(chunk, start + n - s),
+                                            start=s)
+        feats, names = shower_observables(showers, e_inc, geometry=geometry,
+                                          threshold=threshold)
+        if per_layer:
+            layer_feats, layer_names = per_layer_observables(
+                showers, geometry=geometry, threshold=threshold)
+            feats = np.hstack([feats, layer_feats])
+            names = names + layer_names
+        feat_blocks.append(feats)
+        e_blocks.append(e_inc)
+        del showers
+    return np.vstack(feat_blocks), names, np.concatenate(e_blocks)

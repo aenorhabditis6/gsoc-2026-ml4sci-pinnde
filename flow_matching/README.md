@@ -31,6 +31,9 @@ other way (`t=0` data → `t=1` noise); the two are related by `t → 1−t`.
 - `demo.py` — trains on a 2-D GMM toy and reports `pinnde_eval` metrics.
 - `demo_conditional.py` — trains `p(observables | energy)` on the calo-flavoured
   shower toy and scores it pooled, per energy bin, and at fixed conditions.
+- `demo_calo.py` — the same on **real CaloChallenge ds2 showers**: trains on
+  `dataset_2_1`, scores against the held-out `dataset_2_2` and the measured
+  Geant4 null floor.
 - `_utils.py` — seeding and array helpers.
 - `tests/` — edge-case + "it actually learns" tests.
 
@@ -39,7 +42,8 @@ other way (`t=0` data → `t=1` noise); the two are related by `t → 1−t`.
 ```bash
 cd Tina
 python -m flow_matching.demo              # train on a 2-D GMM, score vs truth
-python -m flow_matching.demo_conditional  # train p(observables | energy)
+python -m flow_matching.demo_conditional  # train p(observables | energy), toy
+python -m flow_matching.demo_calo         # the same on real ds2 showers
 pytest flow_matching/tests -q
 ```
 
@@ -92,11 +96,38 @@ Per energy bin the pooled number hides a trend — AUC rises 0.512 / 0.551 /
 the weakest (narrow distributions make the same absolute error more visible).
 At fixed `c*`, per-feature means track truth to ≲0.5%.
 
-Full numbers and the calibration behind them: `../pinnde_eval/DEVLOG.md` §10.
+**Real CaloChallenge ds2, 100k events, 12000 steps (conditional, ~5 min CPU).**
+Trained on `dataset_2_1`, scored against the held-out `dataset_2_2`. Pooled, it
+is **indistinguishable from Geant4**: AUC 0.5048 against a measured null floor
+of 0.4971, χ² 1.118 vs 1.096, SWD 0.0168 vs a floor of 0.0222.
+
+Per energy bin tells a completely different story:
+
+| energy bin | swd | auc | sep |
+|---|---|---|---|
+| E 0–25% | 0.0474 | **0.787 ± 0.010** | 0.01266 |
+| E 25–50% | 0.0465 | 0.573 ± 0.016 | 0.01186 |
+| E 50–75% | 0.0329 | 0.498 ± 0.015 | 0.01159 |
+| E 75–100% | 0.0338 | 0.527 ± 0.018 | 0.00910 |
+
+A quarter of the data is trivially separable while the pooled AUC sits at the
+floor. Low-energy showers are sparse and nearly discrete, which a continuous
+flow in observable space models badly — and note this is the *opposite* trend
+to the toy, where AUC rose with energy. The toy did not predict where the real
+model fails.
+
+The local maps only see it once you condition: pooled they give out-of-fold AUC
+0.504 and max |r| 2.5 (below the |r| > 3 threshold); on the worst slice, 0.787
+and max |r| 3.8, with 32% of generated samples confidently fake. Find the bad
+slice with `evaluate_by_condition`, *then* localize inside it.
+
+Full numbers and calibration: `../pinnde_eval/DEVLOG.md` §10 (toy) and §13 (real).
 
 ## Next
-Ablate the architecture upgrades one at a time, scoring each with `pinnde_eval`:
-adaptive collocation (non-uniform `t` sampling), richer Fourier features, then a
-physics-informed continuity-equation residual. The open modelling gap is the
-gamma tail on the skewed observable (see AUC above). Real calorimeter data is
-deferred and plugs in via `evaluate(..., features_fn=...)`.
+The open modelling gap is **low-energy showers on real data** (AUC 0.787 in the
+lowest quartile). Directions worth trying, cheapest first: a logit transform on
+the bounded observables so `sparsity` cannot be pushed against its ceiling;
+weighting the training loss toward low `c`; a finer condition embedding where
+the density changes fastest. Then the architecture ablations — adaptive
+collocation, richer Fourier features, a physics-informed continuity-equation
+residual — each scored with `pinnde_eval` against the null floor.

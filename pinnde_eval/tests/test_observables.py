@@ -227,6 +227,68 @@ def test_separation_power_in_evaluate_results():
     assert res["sep_per_feature"].shape == (2,)
 
 
+# --- per-layer observables (official CaloChallenge granularity) -------------
+
+def test_per_layer_shapes_and_names():
+    x = one_hot_shower(DS2, layer=0, alpha=0, r=0, n=4)
+    feats, names = pe.per_layer_observables(x)
+    assert feats.shape == (4, 4 * 45) and len(names) == 4 * 45
+    assert names[0] == "E_layer_0" and names[45] == "sparsity_layer_0"
+    assert names[90] == "r_mean_layer_0" and names[135] == "r_width_layer_0"
+
+
+def test_per_layer_isolates_the_lit_layer():
+    """One lit voxel: only its layer has energy, and only it is non-sparse."""
+    x = one_hot_shower(DS2, layer=20, alpha=3, r=6, energy=4.0)
+    feats, names = pe.per_layer_observables(x)
+    f = dict(zip(names, feats[0]))
+
+    assert f["E_layer_20"] == pytest.approx(4.0)
+    assert f["E_layer_19"] == 0.0 and f["E_layer_21"] == 0.0
+
+    # sparsity is per layer: 143 of 144 voxels empty in the lit layer, all
+    # 144 empty everywhere else.
+    assert f["sparsity_layer_20"] == pytest.approx(1 - 1 / (16 * 9))
+    assert f["sparsity_layer_19"] == pytest.approx(1.0)
+
+    # radial centre resolves within the lit layer; dead layers give 0, not NaN
+    assert f["r_mean_layer_20"] == pytest.approx(6.5)
+    assert f["r_width_layer_20"] == pytest.approx(0.0)
+    assert f["r_mean_layer_19"] == 0.0
+
+
+def test_per_layer_radial_width_within_one_layer():
+    x = (one_hot_shower(DS2, layer=7, alpha=0, r=1)
+         + one_hot_shower(DS2, layer=7, alpha=0, r=7))
+    feats, names = pe.per_layer_observables(x)
+    f = dict(zip(names, feats[0]))
+    assert f["r_mean_layer_7"] == pytest.approx(4.5)    # (1.5 + 7.5) / 2
+    assert f["r_width_layer_7"] == pytest.approx(3.0)   # half-separation
+
+
+def test_per_layer_energies_agree_with_layer_energies():
+    rng = np.random.default_rng(20)
+    x = rng.random((6, DS2.n_voxels))
+    feats, names = pe.per_layer_observables(x)
+    assert np.allclose(feats[:, :45], pe.layer_energies(x))
+
+
+def test_per_layer_all_finite_on_empty_showers():
+    feats, _ = pe.per_layer_observables(np.zeros((2, DS2.n_voxels)))
+    assert np.all(np.isfinite(feats))
+
+
+def test_features_fn_per_layer_widens_the_vector():
+    rng = np.random.default_rng(21)
+    x = rng.random((8, DS2.n_voxels))
+    e_inc = rng.uniform(1e3, 1e5, size=8)
+    core = pe.shower_features_fn(e_inc)(x)
+    wide = pe.shower_features_fn(e_inc, per_layer=True)(x)
+    assert core.shape == (8, 7)
+    assert wide.shape == (8, 7 + 4 * 45)
+    assert np.allclose(wide[:, :7], core)
+
+
 # --- standardization (needed once features carry different units) -----------
 
 def test_standardize_makes_swd_invariant_to_feature_units():

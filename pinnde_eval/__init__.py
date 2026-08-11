@@ -26,7 +26,8 @@ Two study/diagnostic layers sit on top of the metrics:
 from .evaluate import evaluate, evaluate_by_condition, report, plot_histograms
 from .local import binned_residual_map, classifier_discrepancy, mmd_witness
 from .observables import (Geometry, GEOMETRIES, READOUT_THRESHOLD_MEV,
-                          layer_energies, load_calochallenge, radial_profile,
+                          layer_energies, load_calochallenge,
+                          per_layer_observables, radial_profile,
                           shower_features_fn, shower_observables,
                           voxel_energy_spectrum)
 from .stability import min_resolvable_n, separation_z, stability_study
@@ -58,6 +59,7 @@ __all__ = [
     "GEOMETRIES",
     "READOUT_THRESHOLD_MEV",
     "shower_observables",
+    "per_layer_observables",
     "shower_features_fn",
     "layer_energies",
     "radial_profile",

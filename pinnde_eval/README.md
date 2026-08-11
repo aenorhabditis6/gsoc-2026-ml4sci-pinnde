@@ -184,6 +184,29 @@ Get the data from [Zenodo](https://zenodo.org/records/6366271) (ds2, electrons,
 two files of 100k showers) and put it in `Tina/`. It is gitignored — the files
 are ~1.4 GB each and GitHub rejects blobs over 100 MB.
 
+### Two granularities
+
+| Function | Returns | When |
+|---|---|---|
+| `shower_observables` | 7 whole-shower numbers | quick comparisons, training monitors, the FM demo |
+| `per_layer_observables` | 4 × n_layers (180 for ds2): energy, sparsity, radial centre, radial width, each per layer | matching published CaloChallenge numbers; feeding the local maps |
+
+The per-layer versions reproduce the official `HighLevelFeatures` definitions
+(`E_layers`, `sparsity`, `EC_r`, `width_r`) with the same energy-weighted RMS,
+so they are directly comparable. Its per-layer eta/phi centres and widths need
+the detector maps from `binning.xml` and are not reproduced; `sigma_r` carries
+the transverse information instead.
+
+```python
+from pinnde_eval import per_layer_observables, observables_from_file
+
+feats, names = per_layer_observables(showers, geometry="ds2")
+
+# or read a large file in chunks (raw ds2 is ~5 GB; observables are tiny)
+feats, names, e_inc = observables_from_file("dataset_2_1.hdf5", n=50000,
+                                            per_layer=True)
+```
+
 **Two things that will bite you:**
 
 *Voxel ordering is `(layer, alpha, r)`.* ds2's 6480 voxels are 45 layers × 16
