@@ -8,4 +8,6 @@ __pycache__/
 # ds2: https://zenodo.org/records/6366271
 *.hdf5
 *.h5
+*.pt
 data/
+sijil_data/
