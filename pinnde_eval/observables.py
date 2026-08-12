@@ -141,6 +141,23 @@ def voxel_energy_spectrum(showers, geometry="ds2", threshold=0.0):
     return x[x > threshold]
 
 
+def discrete_observables(geometry="ds2"):
+    """Observables that live on a lattice, and their spacing.
+
+    ``sparsity`` is a *count*: the fraction of empty voxels, so it takes only
+    the values ``1 - k/n_voxels`` for integer k. That matters for generative
+    models -- a continuous density cannot reproduce an atomic comb, and the
+    coarseness is energy dependent. In ds2 a low-energy shower lights 6-395 of
+    6480 voxels, giving ~350 distinct sparsity values, while a high-energy one
+    lights thousands and looks continuous. Models should dequantize it during
+    training and quantize back when sampling.
+
+    Returns ``{name: spacing}``.
+    """
+    geom = get_geometry(geometry)
+    return {"sparsity": 1.0 / geom.n_voxels}
+
+
 def per_layer_observables(showers, geometry="ds2", threshold=0.0):
     """Per-layer observables, matching the official CaloChallenge definitions.
 

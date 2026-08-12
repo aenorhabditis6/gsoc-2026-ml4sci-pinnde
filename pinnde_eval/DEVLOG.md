@@ -491,8 +491,124 @@ maps inside it. Either step alone would have missed this.
 
 ### Open modelling gap
 
-Low-energy showers. The fix directions worth trying, cheapest first: model
-bounded observables through a logit transform so sparsity cannot be pushed
-against its ceiling; weight the training loss toward low `c`; or condition the
-Fourier embedding more finely where the density changes fastest. None attempted
-yet — recorded so the next run has a starting point.
+Low-energy showers. Diagnosed and fixed in §14 — the numbers in this section
+are the **baseline** configuration (`hidden=128, depth=3, n_steps=12000`),
+kept because the diagnosis is the useful part.
+
+## 14. Diagnosing and fixing the low-energy failure
+
+Three hypotheses for the AUC of 0.787 in the lowest energy quartile, tested in
+order. Two were wrong, and the wrong ones were informative.
+
+### A. Support / boundary pile-up — refuted
+
+The idea: `sparsity` and `f_samp` are bounded, low-energy showers pile against
+the ceiling, and the flow overshoots it. Measured on 5026 low-E events:
+**0.0%** sit in the top 1% of either observable's range. Nothing is against a
+bound. A logit transform, which is what I had written into §13 as the first
+thing to try, would have done nothing.
+
+### B. Discreteness — confirmed as a fact, rejected as the cause
+
+`sparsity` is a voxel *count*: it takes only the values `1 - k/6480`. Measured
+deviation from that lattice is 4.55e-13, i.e. exact. The coarseness is
+strongly energy dependent:
+
+```
+          lit voxels        distinct sparsity values   top-10 atoms hold
+low E      6 .. 395  (med 166)        353 / 5026 events      7.8% of mass
+high E  2224 .. 5496  (med 3874)     2263 / 4990 events      1.4% of mass
+```
+
+So at low energy a continuous flow is asked to reproduce a comb of ~350 atoms.
+The textbook fix is dequantization: spread each atom over its lattice cell
+during training (`+ U(0, 1/6480)`), floor back when sampling. Implemented in
+`demo_calo.FeatureTransform`.
+
+**It changed nothing: low-E AUC 0.787 → 0.785.** Kept anyway, because it is
+physically correct — generated sparsity now lands on the same lattice as
+Geant4 instead of between its teeth — but recorded as an honest negative
+result. A real property of the data is not automatically the cause of a
+failure.
+
+### C. Joint structure — the actual cause
+
+The clue was already in §13: separation power in the low bin (0.0129) is
+barely worse than in the others (0.0117, 0.0116, 0.0090), while AUC is 0.787
+against ~0.5. Separation power reads 1-D marginals; AUC reads the joint. So
+the marginals were never the problem.
+
+Per-observable separability inside the low-E slice, cross-validated:
+
+```
+E_tot 0.507  f_samp 0.482  z_mean 0.495  z_width 0.484
+r_mean 0.480  r_width 0.489  sparsity 0.496
+all 7, linear classifier      0.477
+all 7, nonlinear MLP          0.788
+```
+
+**Every marginal is at chance, a linear model on all seven is at chance, and
+only a nonlinear model separates them.** The failure is entirely nonlinear
+joint structure. Correlation matrices confirm it:
+
+```
+                    max |corr difference|   mean
+low  E (bad)               0.133           0.035
+high E (fine)              0.037           0.016
+
+worst pair, low E:  E_tot / sparsity   Geant4 -0.951   generated -0.818
+```
+
+At low energy those two are nearly deterministic — deposit more energy, light
+more voxels, with only ~166 lit — so the observables sit close to a thin
+manifold. The flow produced a fatter cloud around it: right marginals, wrong
+correlations.
+
+### What fixed it
+
+```
+config                    ODE steps   low-E AUC   gen corr (G4 -0.951)
+baseline h128 d3 12k          50        0.7881        -0.818
+baseline h128 d3 12k         200        0.7819        -0.824
+baseline h128 d3 12k         800        0.7832        -0.824
+wider    h384 d5 30k          50        0.5441        -0.915
+wider    h384 d5 30k         200        0.5068        -0.927
+wider    h384 d5 30k         800        0.5075        -0.927
+```
+
+**ODE resolution was not the bottleneck** — 16× the integration steps moved
+the baseline by 0.005. **Capacity was**: a wider, deeper field trained longer
+drops low-E AUC from 0.788 to 0.544, and only *then* do extra ODE steps buy
+anything (0.544 → 0.507). A velocity field too smooth to represent the
+manifold cannot be rescued by integrating it more carefully; once it is sharp
+enough, integration accuracy starts to matter.
+
+### Result with `hidden=384, depth=5, n_steps=30000, ode_steps=200`
+
+```
+energy bin      n      swd      auc (before)        sep
+E 0-25%      2001   0.0345   0.509 +/- 0.020 (0.787)  0.00909
+E 25-50%     1967   0.0467   0.510 +/- 0.011 (0.573)  0.01071
+E 50-75%     2030   0.0302   0.487 +/- 0.020 (0.498)  0.01166
+E 75-100%    2002   0.0316   0.496 +/- 0.009 (0.527)  0.00851
+
+pooled: auc 0.4998 (floor 0.4971)  chi2 0.949  swd 0.0177  sep 0.0026
+sparsity: chi2 1.68 -> 0.71, sep 0.00515 -> 0.00216
+local maps: max |r| 2.1 pooled, 2.4 on the worst slice -- both below the
+            |r| > 3 threshold; confidently-fake gen 32.2% -> 1.8%
+```
+
+Every energy bin now sits within about one sigma of 0.5. No slice is
+separable, which is the bar §13 said the pooled number was hiding.
+
+### Transferable lessons
+
+1. **The metric that finds a failure is not the metric that diagnoses it.**
+   Per-bin AUC found it; separation power being *fine* is what proved the
+   marginals were innocent and pointed at the joint.
+2. **A marginal fix cannot repair a joint failure.** Dequantization was
+   correct physics and bought zero AUC.
+3. **Check capacity before sampling resolution.** The intuitive knob (more ODE
+   steps) did nothing until the field was good enough to be worth resolving.
+4. A real, verifiable property of the data (discreteness) is not evidence that
+   it causes the failure you happen to be looking at.

@@ -101,33 +101,50 @@ Trained on `dataset_2_1`, scored against the held-out `dataset_2_2`. Pooled, it
 is **indistinguishable from Geant4**: AUC 0.5048 against a measured null floor
 of 0.4971, χ² 1.118 vs 1.096, SWD 0.0168 vs a floor of 0.0222.
 
-Per energy bin tells a completely different story:
+Per energy bin, the first configuration told a completely different story —
+and fixing it is the most instructive result in the project:
 
-| energy bin | swd | auc | sep |
-|---|---|---|---|
-| E 0–25% | 0.0474 | **0.787 ± 0.010** | 0.01266 |
-| E 25–50% | 0.0465 | 0.573 ± 0.016 | 0.01186 |
-| E 50–75% | 0.0329 | 0.498 ± 0.015 | 0.01159 |
-| E 75–100% | 0.0338 | 0.527 ± 0.018 | 0.00910 |
+| energy bin | auc, `h128 d3 12k` | auc, `h384 d5 30k` |
+|---|---|---|
+| E 0–25% | **0.787 ± 0.010** | 0.509 ± 0.020 |
+| E 25–50% | 0.573 ± 0.016 | 0.510 ± 0.011 |
+| E 50–75% | 0.498 ± 0.015 | 0.487 ± 0.020 |
+| E 75–100% | 0.527 ± 0.018 | 0.496 ± 0.009 |
 
-A quarter of the data is trivially separable while the pooled AUC sits at the
-floor. Low-energy showers are sparse and nearly discrete, which a continuous
-flow in observable space models badly — and note this is the *opposite* trend
-to the toy, where AUC rose with energy. The toy did not predict where the real
-model fails.
+The baseline had a quarter of the data trivially separable while its pooled
+AUC sat at the floor. Note the trend is the *opposite* of the toy, where AUC
+rose with energy — the toy did not predict where the real model fails.
 
-The local maps only see it once you condition: pooled they give out-of-fold AUC
-0.504 and max |r| 2.5 (below the |r| > 3 threshold); on the worst slice, 0.787
-and max |r| 3.8, with 32% of generated samples confidently fake. Find the bad
-slice with `evaluate_by_condition`, *then* localize inside it.
+**The diagnosis mattered more than the fix.** Separation power in the bad bin
+was barely worse than elsewhere, which proved the marginals were fine and the
+*joint* was wrong: every one of the 7 observables was individually at chance
+(AUC 0.48–0.51), a linear classifier on all 7 was at chance (0.477), and only
+a nonlinear one separated them (0.788). At low energy `E_tot` and `sparsity`
+are nearly deterministic (Geant4 correlation −0.951); the flow produced −0.818,
+a fatter cloud around a thin manifold.
 
-Full numbers and calibration: `../pinnde_eval/DEVLOG.md` §10 (toy) and §13 (real).
+Two plausible fixes did nothing. `sparsity` really is discrete — exactly
+`1 − k/6480` — so it gets dequantized during training and floored back when
+sampling, which is correct physics and moved AUC by 0.002. More ODE integration
+steps moved it by 0.005 over a 16× increase. **Capacity was the bottleneck**,
+and extra ODE steps only started paying off once the field was sharp enough to
+resolve (0.544 → 0.507 at 200 steps).
+
+The local maps only see the failure once you condition: pooled they gave
+out-of-fold AUC 0.504 and max |r| 2.5 (below the |r| > 3 threshold); on the bad
+slice, 0.787 and max |r| 3.8 with 32% of generated samples confidently fake.
+Find the bad slice with `evaluate_by_condition`, *then* localize inside it.
+
+Full numbers and the full diagnostic chain: `../pinnde_eval/DEVLOG.md` §10
+(toy), §13 (real data), §14 (diagnosis and fix).
 
 ## Next
-The open modelling gap is **low-energy showers on real data** (AUC 0.787 in the
-lowest quartile). Directions worth trying, cheapest first: a logit transform on
-the bounded observables so `sparsity` cannot be pushed against its ceiling;
-weighting the training loss toward low `c`; a finer condition embedding where
-the density changes fastest. Then the architecture ablations — adaptive
-collocation, richer Fourier features, a physics-informed continuity-equation
-residual — each scored with `pinnde_eval` against the null floor.
+The 7-observable conditional model now sits at the Geant4 null floor in every
+energy bin, so the next step is **more of the shower**: the 180-column
+per-layer observables (`per_layer_observables`), then the voxel space itself.
+Both raise the same manifold question §14 answered here at d=7 — expect
+capacity, not sampling resolution, to be the binding constraint again.
+
+Architecture ablations still open: adaptive collocation (non-uniform `t`
+sampling), richer Fourier features, and a physics-informed
+continuity-equation residual, each scored against the null floor.

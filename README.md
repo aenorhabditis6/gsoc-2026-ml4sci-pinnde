@@ -232,13 +232,18 @@ python -m flow_matching.demo_calo    # needs both ds2 files in Tina/
 ```
 
 Trains `p(shower observables | E_inc)` on `dataset_2_1` and scores it against
-the held-out `dataset_2_2` plus the measured Geant4 null floor. The result is
-the clearest argument in the project for per-condition evaluation: **pooled it
-is indistinguishable from Geant4** (AUC 0.5048 against a 0.4971 floor), while
-the **lowest energy quartile sits at AUC 0.787**. The local maps see nothing
-pooled (max |r| 2.5, below threshold) and light up on that slice (max |r| 3.8,
-32% of generated samples confidently fake). Details in
-`pinnde_eval/DEVLOG.md` §13.
+the held-out `dataset_2_2` plus the measured Geant4 null floor (~20 min on CPU).
+The model now sits **at the floor in every energy bin** — AUC 0.487–0.510 per
+quartile, 0.4998 pooled against a 0.4971 floor.
+
+Getting there is the clearest argument in the project for per-condition
+evaluation. The first configuration was pooled-indistinguishable from Geant4
+while its **lowest energy quartile sat at AUC 0.787** — a quarter of the data
+badly modelled, entirely invisible in the pooled score. Separation power being
+*fine* in that bin is what proved the marginals were innocent and the joint was
+wrong; two plausible fixes (dequantization, more ODE steps) moved it by under
+0.01, and capacity was the real bottleneck. Full chain in
+`pinnde_eval/DEVLOG.md` §13–14.
 
 ---
 

@@ -28,8 +28,9 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 import numpy as np
 import torch
 
-from pinnde_eval import (binned_residual_map, classifier_discrepancy, evaluate,
-                         evaluate_by_condition, report, separation_power)
+from pinnde_eval import (binned_residual_map, classifier_discrepancy,
+                         discrete_observables, evaluate, evaluate_by_condition,
+                         report, separation_power)
 from pinnde_eval.observables import observables_from_file
 
 from .core import sample
@@ -50,18 +51,46 @@ def energy_bin_labels(c):
 
 
 class FeatureTransform:
-    """Log the wide-dynamic-range columns, then z-score. Invertible.
+    """Dequantize discrete columns, log the wide ones, z-score. Invertible.
 
     Fit on the training set only, so the evaluation set gets no say in the
     normalization -- the same discipline as ``evaluate(standardize=True)``.
+
+    **Dequantization.** ``sparsity`` is a voxel *count*: it only takes values
+    ``1 - k/6480``. A continuous flow puts smooth density everywhere and can
+    never reproduce that comb, which is trivially detectable -- and worst at
+    low incident energy, where a shower lights as few as 6 voxels and sparsity
+    spans only ~350 distinct values (DEVLOG section 14). The standard fix for
+    discrete data under a continuous model is to spread each atom over its
+    lattice cell during training (add U(0,1) to the integer count) and floor
+    back to the lattice when sampling. The model then learns a smooth density
+    whose quantized marginal matches the data exactly.
     """
 
-    def __init__(self, feats, names):
+    def __init__(self, feats, names, geometry="ds2", seed=0):
         self.names = list(names)
         self.log_idx = [i for i, n in enumerate(names) if n in LOG_FEATURES]
-        x = self._to_log(np.asarray(feats, dtype=np.float64))
+        spacings = discrete_observables(geometry)
+        self.discrete = {names.index(n): s for n, s in spacings.items()
+                         if n in names}
+        self.rng = np.random.default_rng(seed)
+        x = self._to_log(self._dequantize(np.asarray(feats, dtype=np.float64)))
         self.mean = x.mean(axis=0)
         self.std = np.where(x.std(axis=0) > 0, x.std(axis=0), 1.0)
+
+    def _dequantize(self, x):
+        """Spread each lattice atom uniformly over its own cell."""
+        x = x.copy()
+        for i, spacing in self.discrete.items():
+            x[:, i] = x[:, i] + self.rng.uniform(0.0, spacing, size=len(x))
+        return x
+
+    def _quantize(self, x):
+        """Snap back onto the lattice: the exact inverse of _dequantize."""
+        x = x.copy()
+        for i, spacing in self.discrete.items():
+            x[:, i] = np.floor(x[:, i] / spacing) * spacing
+        return x
 
     def _to_log(self, x):
         x = x.copy()
@@ -69,15 +98,17 @@ class FeatureTransform:
             x[:, i] = np.log(np.clip(x[:, i], 1e-8, None))
         return x
 
-    def forward(self, feats):
-        return (self._to_log(np.asarray(feats, dtype=np.float64))
-                - self.mean) / self.std
+    def forward(self, feats, dequantize=True):
+        x = np.asarray(feats, dtype=np.float64)
+        if dequantize:
+            x = self._dequantize(x)
+        return (self._to_log(x) - self.mean) / self.std
 
-    def inverse(self, z):
+    def inverse(self, z, quantize=True):
         x = np.asarray(z, dtype=np.float64) * self.std + self.mean
         for i in self.log_idx:
             x[:, i] = np.exp(np.clip(x[:, i], -50, 50))
-        return x
+        return self._quantize(x) if quantize else x
 
 
 def normalized_log_energy(e_inc, lo=None, hi=None):
@@ -112,8 +143,16 @@ def compare_to_floor(res, title):
         print(f"{key:>10} | {val:10.4f} | {floor:10.4f} | {note:>9}")
 
 
-def main(n_train=100000, n_eval=8000, n_steps=12000, seed=0, plot_path=None,
-         data_dir=None):
+def main(n_train=100000, n_eval=8000, n_steps=30000, hidden=384, depth=5,
+         ode_steps=200, seed=0, plot_path=None, data_dir=None,
+         dequantize=True):
+    """Train and score p(observables | E_inc) on real ds2. ~20 min on CPU.
+
+    The defaults are the configuration that actually fixes the low-energy
+    failure (DEVLOG section 14). The original ``hidden=128, depth=3,
+    n_steps=12000`` reaches AUC 0.79 in the lowest energy quartile; it is kept
+    documented because the *diagnosis* is the useful part, not the number.
+    """
     data_dir = data_dir or os.path.abspath(
         os.path.join(os.path.dirname(__file__), ".."))
     train_path = os.path.join(data_dir, "dataset_2_1.hdf5")
@@ -129,17 +168,22 @@ def main(n_train=100000, n_eval=8000, n_steps=12000, seed=0, plot_path=None,
     x_eval, _, e_eval = observables_from_file(eval_path, n_eval)
     print(f"  {len(names)} observables: {', '.join(names)}")
 
-    tf = FeatureTransform(x_train, names)
+    tf = FeatureTransform(x_train, names, seed=seed)
+    if not dequantize:                      # ablation: treat counts as continuous
+        tf.discrete = {}
+    print(f"  dequantized columns: "
+          f"{[names[i] for i in tf.discrete] or 'none (ablation)'}")
     z_train = tf.forward(x_train)
     c_train, lo, hi = normalized_log_energy(e_train)
     c_eval, _, _ = normalized_log_energy(e_eval, lo, hi)
 
     print(f"\ntraining conditional flow matching: d={len(names)}, cond=1, "
-          f"n={n_train}, steps={n_steps}")
+          f"n={n_train}, steps={n_steps}, hidden={hidden}, depth={depth}")
     model, history = train_flow_matching(
         torch.tensor(z_train, dtype=torch.float32), dim=len(names),
         cond=torch.tensor(c_train, dtype=torch.float32),
-        n_steps=n_steps, seed=seed, monitor_every=max(1, n_steps // 8),
+        n_steps=n_steps, hidden=hidden, depth=depth,
+        seed=seed, monitor_every=max(1, n_steps // 8),
         monitor_real=torch.tensor(tf.forward(x_eval), dtype=torch.float32),
         monitor_cond=torch.tensor(c_eval, dtype=torch.float32),
     )
@@ -151,7 +195,7 @@ def main(n_train=100000, n_eval=8000, n_steps=12000, seed=0, plot_path=None,
     # units so every number below is in the observables' real scale.
     z_gen = sample(model, n_eval, len(names),
                    cond=torch.tensor(c_eval, dtype=torch.float32),
-                   steps=50, seed=seed)
+                   steps=ode_steps, seed=seed)
     gen = tf.inverse(z_gen.detach().cpu().numpy())
 
     print()
