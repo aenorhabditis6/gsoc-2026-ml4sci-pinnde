@@ -36,10 +36,16 @@ from pinnde_eval.observables import observables_from_file
 from .core import sample
 from .train import train_flow_matching
 
-# Measured Geant4-vs-Geant4 floor at N=8000, standardized (DEVLOG section 11).
-# Any model number is only meaningful next to this row.
-NULL_FLOOR = {"auc": 0.4971, "chi2_mean": 1.096, "swd": 0.0222,
-              "w1_mean": 0.0221, "sep_mean": 0.0030}
+# Measured Geant4-vs-Geant4 floors at N=8000, standardized (DEVLOG sections
+# 11 and 15). Any model number is only meaningful next to the row for its own
+# feature space -- the floor moves with dimension, and FPD moves violently
+# (2.0e-04 at d=7, 4.1e-02 at d=187).
+NULL_FLOORS = {
+    7: {"auc": 0.4971, "chi2_mean": 1.096, "swd": 0.0222,
+        "w1_mean": 0.0221, "sep_mean": 0.0030},
+    187: {"auc": 0.5007, "chi2_mean": 1.042, "swd": 0.0240,
+          "w1_mean": 0.0235, "sep_mean": 0.0029},
+}
 
 BIN_EDGES = (0.25, 0.5, 0.75)
 BIN_NAMES = ("E 0-25%", "E 25-50%", "E 50-75%", "E 75-100%")
@@ -119,7 +125,7 @@ def normalized_log_energy(e_inc, lo=None, hi=None):
     return ((log_e - lo) / (hi - lo)).reshape(-1, 1), lo, hi
 
 
-def compare_to_floor(res, title):
+def compare_to_floor(res, title, floor):
     """Print model numbers beside the measured perfect-generator floor.
 
     Caveat worth keeping in view: the floor was measured between two
@@ -134,24 +140,28 @@ def compare_to_floor(res, title):
     got = {"auc": res["auc"][0], "chi2_mean": res["chi2_mean"],
            "swd": res["swd"], "w1_mean": res["w1_mean"],
            "sep_mean": res["sep_mean"]}
-    for key, floor in NULL_FLOOR.items():
+    for key, ref in floor.items():
         val = got[key]
-        if key == "auc":
-            note = f"{val - 0.5:+.4f}"
-        else:
-            note = f"{val / floor:.1f}x"
-        print(f"{key:>10} | {val:10.4f} | {floor:10.4f} | {note:>9}")
+        note = f"{val - 0.5:+.4f}" if key == "auc" else f"{val / ref:.1f}x"
+        print(f"{key:>10} | {val:10.4f} | {ref:10.4f} | {note:>9}")
 
 
 def main(n_train=100000, n_eval=8000, n_steps=30000, hidden=384, depth=5,
          ode_steps=200, seed=0, plot_path=None, data_dir=None,
-         dequantize=True):
+         dequantize=True, per_layer=False):
     """Train and score p(observables | E_inc) on real ds2. ~20 min on CPU.
 
     The defaults are the configuration that actually fixes the low-energy
     failure (DEVLOG section 14). The original ``hidden=128, depth=3,
     n_steps=12000`` reaches AUC 0.79 in the lowest energy quartile; it is kept
     documented because the *diagnosis* is the useful part, not the number.
+
+    ``per_layer=True`` models the 187-column space (7 core + 4 per layer)
+    instead of the 7 core observables, which is the resolution published
+    CaloChallenge numbers are quoted at. It is a much harder target: at low
+    incident energy 98 of the 187 columns put over half their mass on a single
+    value (an empty layer has sparsity exactly 1 and radial centre exactly 0),
+    so the effective dimension collapses where the model already struggled.
     """
     data_dir = data_dir or os.path.abspath(
         os.path.join(os.path.dirname(__file__), ".."))
@@ -164,9 +174,17 @@ def main(n_train=100000, n_eval=8000, n_steps=30000, hidden=384, depth=5,
                 f"https://zenodo.org/records/6366271 into the Tina/ folder.")
 
     print(f"extracting observables: {n_train} train / {n_eval} eval showers")
-    x_train, names, e_train = observables_from_file(train_path, n_train)
-    x_eval, _, e_eval = observables_from_file(eval_path, n_eval)
-    print(f"  {len(names)} observables: {', '.join(names)}")
+    x_train, names, e_train = observables_from_file(train_path, n_train,
+                                                    per_layer=per_layer)
+    x_eval, _, e_eval = observables_from_file(eval_path, n_eval,
+                                              per_layer=per_layer)
+    print(f"  {len(names)} observables"
+          + (f": {', '.join(names)}" if len(names) <= 12 else
+             f" (7 core + 4 x 45 per-layer)"))
+    floor = NULL_FLOORS.get(len(names))
+    if floor is None:
+        raise SystemExit(f"no measured null floor for d={len(names)}; run "
+                         f"pinnde_eval.validate_calo at this dimension first")
 
     tf = FeatureTransform(x_train, names, seed=seed)
     if not dequantize:                      # ablation: treat counts as continuous
@@ -201,13 +219,17 @@ def main(n_train=100000, n_eval=8000, n_steps=30000, hidden=384, depth=5,
     print()
     res = evaluate(x_eval, gen, tier="full", seed=seed, standardize=True)
     report(res, title="conditional FM vs Geant4 (ds2_2, pooled over energy)")
-    compare_to_floor(res, "against the measured perfect-generator floor")
+    compare_to_floor(res, "against the measured perfect-generator floor", floor)
 
-    print("\nper observable:")
-    print(f"{'observable':>12} | {'chi2':>7} | {'sep':>8} | {'floor sep':>9}")
-    for i, nm in enumerate(names):
-        print(f"{nm:>12} | {res['chi2_per_feature'][i]:7.2f} | "
-              f"{res['sep_per_feature'][i]:8.5f} | {NULL_FLOOR['sep_mean']:9.4f}")
+    # At d=187 the per-observable table is unreadable in full; show the worst.
+    order = np.argsort(res["sep_per_feature"])[::-1]
+    shown = order if len(names) <= 12 else order[:10]
+    print(f"\nper observable"
+          + ("" if len(names) <= 12 else f" (worst 10 of {len(names)})") + ":")
+    print(f"{'observable':>18} | {'chi2':>7} | {'sep':>8} | {'floor sep':>9}")
+    for i in shown:
+        print(f"{names[i]:>18} | {res['chi2_per_feature'][i]:7.2f} | "
+              f"{res['sep_per_feature'][i]:8.5f} | {floor['sep_mean']:9.4f}")
 
     # Per energy bin -- the pooled number hides a bad slice.
     labels = energy_bin_labels(c_eval)
@@ -312,5 +334,9 @@ def _plot(x_eval, c_eval, gen, names, path):
 
 
 if __name__ == "__main__":
+    # --per-layer models the 187-column space instead of the 7 core observables.
+    per_layer = "--per-layer" in sys.argv
     out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "figures")
-    main(plot_path=os.path.join(out, "fm_calo.png") if os.path.isdir(out) else None)
+    name = "fm_calo_per_layer.png" if per_layer else "fm_calo.png"
+    main(per_layer=per_layer,
+         plot_path=os.path.join(out, name) if os.path.isdir(out) else None)

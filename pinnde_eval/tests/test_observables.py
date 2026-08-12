@@ -337,6 +337,26 @@ def test_heterogeneous_scale_warning(capsys):
     assert "scale-dependent" not in capsys.readouterr().out
 
 
+# --- report() readability at shower dimensionality --------------------------
+
+def test_report_summarizes_long_per_feature_arrays(capsys):
+    """187 observables must not print as a 187-entry row."""
+    rng = np.random.default_rng(30)
+    a, b = rng.normal(size=(200, 40)), rng.normal(size=(200, 40))
+    pe.report(pe.evaluate(a, b, tier="full", standardize=True))
+    out = capsys.readouterr().out
+    assert "d=40" in out and "mean" in out and "max" in out
+    assert max(len(line) for line in out.splitlines()) < 200
+
+
+def test_report_prints_short_arrays_in_full(capsys):
+    rng = np.random.default_rng(31)
+    a, b = rng.normal(size=(200, 3)), rng.normal(size=(200, 3))
+    pe.report(pe.evaluate(a, b, tier="full"))
+    out = capsys.readouterr().out
+    assert "d=3" not in out and out.count(",") >= 2
+
+
 # --- integration with the real file (skipped when absent) -------------------
 
 @pytest.mark.skipif(not os.path.exists(DS2_PATH), reason="ds2 file not present")

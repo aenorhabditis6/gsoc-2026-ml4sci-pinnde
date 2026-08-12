@@ -138,12 +138,41 @@ Find the bad slice with `evaluate_by_condition`, *then* localize inside it.
 Full numbers and the full diagnostic chain: `../pinnde_eval/DEVLOG.md` §10
 (toy), §13 (real data), §14 (diagnosis and fix).
 
+## Per-layer observables: a representational wall
+
+```bash
+python -m flow_matching.demo_calo --per-layer     # 187 columns
+```
+
+Scaling to the 187-column per-layer space **fails outright**, with more
+capacity than the d=7 fix used: out-of-fold AUC **0.9963** pooled and 0.9995 on
+the worst slice, 94% of generated samples confidently fake. For scale, the
+low-energy failure above that everyone would call bad was 0.787.
+
+Zero-inflation explains all of it. An empty layer has energy exactly 0, radial
+centre exactly 0, radial width exactly 0 and sparsity exactly 1, and deep
+layers are empty in up to 60% of showers. A continuous flow cannot put finite
+probability on a point, so it spreads density around the atom — and since the
+atom sits at a physical boundary, that mass lands outside it. Up to **31.6% of
+generated radial widths are negative**. Across the 44 layers,
+`corr(atom mass, out-of-range fraction) = +0.989`: every layer's failure rate
+is predicted by how much of its mass sits on the atom.
+
+This is a different kind of failure from the low-energy one. That was
+*resolution* — the right density, not sharp enough, fixed by capacity. This is
+*representational*: the target is not absolutely continuous, so no continuous
+flow expresses it at any capacity. Dequantization does not help either; that
+treats an evenly spaced lattice, not a single atom coexisting with a
+continuous part.
+
 ## Next
-The 7-observable conditional model now sits at the Geant4 null floor in every
-energy bin, so the next step is **more of the shower**: the 180-column
-per-layer observables (`per_layer_observables`), then the voxel space itself.
-Both raise the same manifold question §14 answered here at d=7 — expect
-capacity, not sampling resolution, to be the binding constraint again.
+The per-layer target needs a **two-part (hurdle) model**: a Bernoulli per layer
+for occupancy (mostly a function of incident energy and depth), and the shape
+observables modelled only where the layer is lit, emitting the exact atom
+otherwise. That removes the impossible values for free. Worth measuring first,
+because it is much cheaper: restrict to the front layers where the atom mass is
+small (0.001–0.048 for layers 0–9) and confirm AUC returns to the floor, which
+would isolate zero-inflation as the sole cause.
 
 Architecture ablations still open: adaptive collocation (non-uniform `t`
 sampling), richer Fourier features, and a physics-informed

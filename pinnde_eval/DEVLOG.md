@@ -612,3 +612,160 @@ separable, which is the bar §13 said the pooled number was hiding.
    steps) did nothing until the field was good enough to be worth resolving.
 4. A real, verifiable property of the data (discreteness) is not evidence that
    it causes the failure you happen to be looking at.
+
+## 15. The per-layer feature space (d=187): floor and degeneracy
+
+`per_layer_observables` gives 4 quantities for each of 45 layers; with the 7
+core observables that is a 187-column space, the resolution published
+CaloChallenge numbers are quoted at. Two things measured before modelling it.
+
+### The null floor moves with dimension — FPD violently
+
+Geant4 vs Geant4, N=8000, standardized:
+
+```
+             d=7 (§11)      d=187
+auc          0.4971         0.5007 +/- 0.0098
+chi2_mean    1.096          1.042
+swd          0.0222         0.0240
+w1_mean      0.0221         0.0235
+sep_mean     0.0030         0.0029
+mmd         -2.3e-05       -3.6e-06
+fpd          2.0e-04        4.1e-02  +/- 4.7e-03
+kpd          6.4e-06       -9.1e-07
+```
+
+Most metrics barely move. **FPD moves by a factor of 200.** It fits Gaussians
+in the feature space and takes a Frechet distance between them, so its
+finite-N bias grows with the number of covariance entries being estimated —
+d=187 means ~17,000 covariance parameters from 8000 samples. A "small" FPD at
+one dimension is a large one at another, and FPD values are not comparable
+across feature spaces at all. This is the §8 rule (compare to the floor at
+*your* N) extended: compare to the floor at your N **and your d**.
+
+`demo_calo` therefore keys its floor table by dimension and refuses to run at
+a dimension with no measured floor, rather than silently comparing against the
+wrong row.
+
+### Half the space collapses at low energy
+
+An empty layer gives `sparsity_layer` exactly 1.0 and `r_mean_layer` exactly
+0.0, so those columns carry point masses. Fraction of columns with more than
+half their probability on a single value:
+
+```
+                       all energies     low-E quartile
+>50% on one value        11 / 187          98 / 187
+>90% on one value         0 / 187          49 / 187
+>99% on one value         0 / 187           3 / 187
+
+mean modal mass, by group   all E    low E
+  E_layer                   0.184    0.482
+  sparsity_layer            0.191    0.506
+  r_mean_layer              0.194    0.518
+  r_width_layer             0.259    0.627
+```
+
+At low incident energy the effective dimension is far below 187 — over half
+the columns are nearly constant, and 49 are essentially frozen. This is the
+§14 manifold problem made much worse: the same slice that needed extra
+capacity at d=7 now also has most of its coordinates degenerate.
+
+Only layer 44 is empty in more than half of all events, so no layer selection
+is needed; restricting to the 44 live layers (d=183) changes nothing
+measurable (auc 0.5037 vs 0.5007).
+
+### `report()` at this width
+
+`report` printed every entry of a 187-element per-feature array, which made
+the table unreadable and its underline several thousand characters wide. It
+now summarizes any array longer than `max_items` (default 8) as
+`[first four, ...] d=N mean/min/max`. Asserted in `test_observables.py`.
+
+## 16. The per-layer model fails, and zero-inflation explains all of it
+
+`python -m flow_matching.demo_calo --per-layer` with `hidden=512, depth=6,
+n_steps=30000` — more capacity than the d=7 fix of §14 — does not merely
+degrade. It fails outright:
+
+```
+                   pooled        worst slice (E 75-100%)
+out-of-fold AUC    0.9963        0.9995
+confidently-fake   94.0%         93.8%
+max |r|            60.0          26.4
+```
+
+AUC 0.9995 is a generator a classifier separates essentially perfectly. For
+contrast, the §14 failure everyone would call bad was 0.787.
+
+### It is not capacity, and not the §14 manifold problem
+
+**More than half the columns carry a point mass at a physical boundary.** An
+empty layer has energy exactly 0, radial centre exactly 0, radial width
+exactly 0, and sparsity exactly 1. Fraction of Geant4 events sitting exactly
+on that atom:
+
+```
+                    layers 0-9   layers 20-29   layers 40-44   max
+E_layer               0.001         0.192          0.474       0.513
+r_mean_layer          0.001         0.192          0.474       0.513
+r_width_layer         0.048         0.283          0.580       0.625
+sparsity_layer (=1)   0.001         0.192          0.474       0.474
+```
+
+A continuous density cannot put finite probability on a single point. The flow
+does the only thing it can — spreads density *around* the atom — which puts
+mass outside the physical range, since the atom sits at the boundary. Up to
+**31.6% of generated `r_width_layer` values are negative**, i.e. impossible.
+
+The link is not suggestive, it is essentially exact. Across the 44 layers,
+the fraction of generated values falling outside the Geant4 range against
+that layer's atom mass:
+
+```
+corr(atom mass, out-of-range fraction) = +0.989
+
+layer  1: atom 10.6%  ->  9.70% impossible
+layer 19: atom 17.0%  ->  8.74%
+layer 31: atom 40.2%  -> 25.01%
+layer 43: atom 59.7%  -> 31.61%
+```
+
+Every layer's failure rate is predicted by how much of its mass is on the
+atom. That is the whole failure; there is nothing else to explain.
+
+### Why this is a different kind of problem from §14
+
+§14 was a *resolution* failure: the right density, insufficiently sharp, fixed
+by capacity. This is a *representational* failure: the target is not
+absolutely continuous, so no amount of capacity in a continuous flow can
+express it. Training longer or wider makes the smeared cloud tighter around
+each atom but never puts finite mass on it. The `--per-layer` run already used
+more capacity than the §14 fix and did far worse.
+
+Note also that dequantization (§14 B) does not apply. There the discreteness
+was a *lattice* — many evenly spaced atoms, which spreading over a cell
+reproduces. Here it is a single atom at a boundary coexisting with a
+continuous part: a zero-inflated distribution, not a quantized one.
+
+### The fix this calls for
+
+A two-part (hurdle) model, which is the standard treatment for zero-inflated
+data:
+
+1. model layer **occupancy** — a Bernoulli per layer for "is this layer lit",
+   which is mostly a function of incident energy and depth;
+2. model the shape observables **conditioned on the layer being lit**, where
+   they are genuinely continuous.
+
+At generation, draw occupancy first and emit the exact atom for empty layers
+rather than a near-miss. This also removes the impossible values for free,
+since the continuous part is only ever sampled where it is defined.
+
+Not attempted yet — it is an architecture change rather than a hyperparameter,
+and the diagnosis is what this section is for. A cheaper intermediate worth
+measuring first: restrict to the front layers, where the atom mass is small
+(layers 0-9 sit at 0.001 for energy and 0.048 for `r_width`), and check that
+AUC returns to the floor. If it does, that isolates zero-inflation as the sole
+cause and gives a usable per-layer model over the calorimeter's active region
+while the hurdle model is built.

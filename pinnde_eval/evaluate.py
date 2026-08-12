@@ -134,8 +134,14 @@ def evaluate_by_condition(real, gen, real_condition, gen_condition=None,
     return out
 
 
-def report(results, title="pinnde_eval"):
-    """Print a results dict as a clean aligned table."""
+def report(results, title="pinnde_eval", max_items=8):
+    """Print a results dict as a clean aligned table.
+
+    Per-feature arrays longer than ``max_items`` are summarized rather than
+    dumped: on shower observables d can be 187, and printing every entry makes
+    the table unreadable (and the rule underneath it thousands of characters
+    wide).
+    """
     lines = []
     for key, val in results.items():
         if val is None:
@@ -143,7 +149,14 @@ def report(results, title="pinnde_eval"):
         elif isinstance(val, tuple):
             body = f"{val[0]:.4g} +/- {val[1]:.4g}"
         elif isinstance(val, np.ndarray):
-            body = "[" + ", ".join(f"{x:.4g}" for x in np.atleast_1d(val)) + "]"
+            arr = np.atleast_1d(val)
+            if len(arr) > max_items:
+                head = ", ".join(f"{x:.4g}" for x in arr[:4])
+                body = (f"[{head}, ...] d={len(arr)}  "
+                        f"mean {np.nanmean(arr):.4g}  "
+                        f"min {np.nanmin(arr):.4g}  max {np.nanmax(arr):.4g}")
+            else:
+                body = "[" + ", ".join(f"{x:.4g}" for x in arr) + "]"
         else:
             body = f"{val:.4g}"
         lines.append(f"{key:>16s} : {body}")
