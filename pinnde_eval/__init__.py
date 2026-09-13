@@ -23,6 +23,8 @@ Two study/diagnostic layers sit on top of the metrics:
   two distributions disagree instead of returning one global number.
 """
 
+from .classical import (combine_pvalues, pvalue_uniformity, report_tests,
+                        two_sample_tests)
 from .evaluate import evaluate, evaluate_by_condition, report, plot_histograms
 from .local import binned_residual_map, classifier_discrepancy, mmd_witness
 from .observables import (Geometry, GEOMETRIES, READOUT_THRESHOLD_MEV,
@@ -34,7 +36,7 @@ from .observables import (Geometry, GEOMETRIES, READOUT_THRESHOLD_MEV,
 from .stability import min_resolvable_n, separation_z, stability_study
 from .tier1 import classifier_two_sample_test, histogram_chi2, separation_power
 from .tier2 import fpd, kpd, wasserstein_per_feature
-from .tier3 import mmd, swd, median_bandwidth
+from .tier3 import mmd, swd, median_bandwidth, sinkhorn
 
 __all__ = [
     "evaluate",
@@ -49,7 +51,12 @@ __all__ = [
     "wasserstein_per_feature",
     "mmd",
     "swd",
+    "sinkhorn",
     "median_bandwidth",
+    "two_sample_tests",
+    "combine_pvalues",
+    "pvalue_uniformity",
+    "report_tests",
     "stability_study",
     "separation_z",
     "min_resolvable_n",

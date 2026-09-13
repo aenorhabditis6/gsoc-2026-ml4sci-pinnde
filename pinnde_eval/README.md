@@ -257,6 +257,44 @@ per-observable separation powers. So a bare S is not interpretable: quote it
 against `n_bins/(2N)`, and never compare two values computed at different N or
 binning. Derivation and the measured table are in `DEVLOG.md` §12.
 
+## Classical two-sample tests and Sinkhorn
+
+`classical.py` adds three standard 1-D two-sample tests, applied per feature.
+Unlike separation power, their null distributions are known, so the p-value can
+be read directly without first measuring a floor.
+
+| Test | What it uses |
+|---|---|
+| Kolmogorov–Smirnov (`ks`) | largest gap between the two empirical CDFs |
+| Cramér–von Mises (`cvm`) | squared CDF gap integrated over the whole range |
+| Anderson–Darling (`ad`) | the same integral weighted towards the tails; slightly ahead of the other two in our power check |
+
+```python
+from pinnde_eval import two_sample_tests, combine_pvalues, sinkhorn
+res = two_sample_tests(real, gen, tests=("ks", "cvm", "ad"))
+combine_pvalues(res["ks"]["pvalue"])     # Bonferroni by default
+sinkhorn(real, gen)                      # debiased Sinkhorn divergence
+```
+
+Things to know:
+
+- **`combine_pvalues` defaults to Bonferroni.** Shower observables are
+  correlated, so their p-values are too, and Fisher's method (which assumes
+  independence) rejected true nulls 14–29% of the time in our checks.
+- **Anderson–Darling's p-value is clipped by scipy to [0.001, 0.25]**: fine for
+  deciding, not for quoting a precise significance.
+- **`sinkhorn` is scale-dependent** (squared Euclidean cost): use
+  `evaluate(..., standardize=True)` for mixed units. Both samples are capped at
+  `max_points=2000`, so its floor stops falling above N=2000.
+- `evaluate(tier="full")` now also reports `sinkhorn`, `ks_pvalue` and
+  `ks_p_combined`.
+
+Checks, on real ds2 (needs both files, loads all 200k showers):
+
+```bash
+python -m pinnde_eval.validate_classical
+```
+
 ## Reproducibility
 
 Everything stochastic (classifier splits/inits, projections, bandwidth
@@ -302,6 +340,10 @@ pytest pinnde_eval/tests -q
   (a calo-flavoured conditional toy: sampling fraction, depth, width vs.
   normalized log-energy).
 - `validate_toys.py` — null / sensitivity / speed checks.
+- `classical.py` — KS, Cramér–von Mises and Anderson–Darling tests, and
+  `combine_pvalues`.
+- `validate_classical.py` — calibration (permutation null), energy difference
+  between the two ds2 files, power, and p-value independence checks.
 - `_utils.py` — array conversion, pair checking, seeding helpers.
 - `DEVLOG.md` — calibration record: every threshold, the measurement behind it,
   and the baseline numbers used to catch regressions.

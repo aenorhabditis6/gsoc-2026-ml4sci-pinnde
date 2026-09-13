@@ -16,7 +16,8 @@ import numpy as np
 from ._utils import check_pair
 from .tier1 import classifier_two_sample_test, histogram_chi2, separation_power
 from .tier2 import fpd, kpd, wasserstein_per_feature
-from .tier3 import mmd, swd
+from .classical import combine_pvalues, two_sample_tests
+from .tier3 import mmd, sinkhorn, swd
 
 
 def _standardize_pair(real, gen):
@@ -49,8 +50,9 @@ def evaluate(real, gen, tier="full", features_fn=None, standardize=False,
 
     Keys: ``mmd``, ``swd`` (Tier 3, always); plus for ``tier="full"`` ``auc``
     (mean, std), ``chi2_per_feature``, ``chi2_mean``, ``sep_per_feature``,
-    ``sep_mean``, ``w1_per_feature``, ``w1_mean``, ``fpd`` (value, error),
-    ``kpd`` (value, error). FPD/KPD are ``None`` if jetnet is not installed.
+    ``sep_mean``, ``sinkhorn``, ``ks_pvalue``, ``ks_p_combined``,
+    ``w1_per_feature``, ``w1_mean``, ``fpd`` (value, error), ``kpd``
+    (value, error). FPD/KPD are ``None`` if jetnet is not installed.
 
     ``standardize`` z-scores both samples using the real sample's mean and
     width. **Use it whenever the features carry different units** -- shower
@@ -85,6 +87,13 @@ def evaluate(real, gen, tier="full", features_fn=None, standardize=False,
     sep = separation_power(real, gen, bins=bins)
     results["sep_per_feature"] = sep
     results["sep_mean"] = float(np.nanmean(sep))
+
+    # Unbinned transport distance in the full feature space, and the
+    # classical per-feature tests whose null distribution is known.
+    results["sinkhorn"] = sinkhorn(real, gen, device=device, seed=seed)
+    ks = two_sample_tests(real, gen, tests=("ks",), seed=seed)["ks"]
+    results["ks_pvalue"] = ks["pvalue"]
+    results["ks_p_combined"] = combine_pvalues(ks["pvalue"])  # Bonferroni
 
     # Tier 2
     w1 = wasserstein_per_feature(real, gen)

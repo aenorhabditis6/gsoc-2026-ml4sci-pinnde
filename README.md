@@ -250,7 +250,7 @@ wrong; two plausible fixes (dequantization, more ODE steps) moved it by under
 ## Tests
 
 ```bash
-python -m pytest pinnde_eval/tests flow_matching/tests -q     # 71 tests
+python -m pytest pinnde_eval/tests flow_matching/tests -q     # 91 tests
 ```
 
 The CaloChallenge observable tests run on synthetic voxel grids with
@@ -275,6 +275,9 @@ python -m pinnde_eval.stability   # metric stability vs sample size
 | `fm_flow.png` | the learned velocity field and noise→data trajectories |
 | `fm_conditional.png` | conditional FM tracking p(observables \| energy): means vs. c + per-bin histograms |
 | `fm_calo.png` | conditional FM on **real** ds2 showers: observable means vs. incident energy + marginals |
+| `fig_calibration.png` | KS p-values under an exact null vs. across the two Geant4 files; false-positive rate per observable |
+| `fig_power.png` | detection rate of KS / CvM vs. separation power on a controlled shift |
+| `fig_voxel_order.png`, `fig_scale_bug.png`, `fig_sep_floor.png`, `fig_energy_bins.png`, `fig_zero_inflation.png` | real-data findings, see `pinnde_eval/DEVLOG.md` §11–16 |
 
 ### Toy result (2-D GMM, 6 modes)
 Generated-vs-truth lands near the statistical floor:
@@ -305,13 +308,15 @@ Tina/
 │   ├── evaluate.py     evaluate(), evaluate_by_condition(), report()
 │   ├── tier1.py        classifier AUC, histogram chi^2
 │   ├── tier2.py        FPD, KPD, per-feature Wasserstein
-│   ├── tier3.py        MMD, sliced Wasserstein (pure torch)
+│   ├── tier3.py        MMD, sliced Wasserstein, Sinkhorn divergence (pure torch)
 │   ├── stability.py    metric stability vs sample size (null floor, resolvability)
 │   ├── local.py        local maps: MMD witness, classifier P(real|x), binned residuals
 │   ├── observables.py  CaloChallenge shower observables + HDF5 loader (features_fn)
 │   ├── data.py         seeded GMM toys
 │   ├── validate_toys.py null / sensitivity / speed checks
 │   ├── validate_calo.py real-data null test + separation-power floor law
+│   ├── classical.py    KS / Cramér–von Mises / Anderson–Darling tests, p-value combination
+│   ├── validate_classical.py calibration, power and independence checks for classical.py
 │   ├── DEVLOG.md       calibration record + chosen thresholds
 │   └── tests/
 ├── flow_matching/      conditional flow-matching generator
@@ -325,5 +330,7 @@ Tina/
 ├── figures/            generated result figures
 ├── make_figures.py     reproduce the result figures
 ├── make_flow_figure.py reproduce the velocity-field / trajectory figure
-└── make_local_figure.py reproduce the local-discrepancy demo figure
+├── make_local_figure.py reproduce the local-discrepancy demo figure
+├── make_postmidterm_figures.py reproduce the real-data result figures
+└── make_classical_figures.py   reproduce the classical-test figures
 ```

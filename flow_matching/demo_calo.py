@@ -317,7 +317,13 @@ def _plot(x_eval, c_eval, gen, names, path):
         ax = axes[1, col]
         lo = min(x_eval[:, j].min(), gen[:, j].min())
         hi = max(x_eval[:, j].max(), gen[:, j].max())
-        b = np.linspace(lo, hi, 60)
+        if names[j] == "E_tot":
+            # E_inc is log-uniform, so E_tot spans three decades. Linear bins
+            # on a log axis put almost everything in the first bin and render
+            # as one meaningless block; bin in log space to match the axis.
+            b = np.logspace(np.log10(max(lo, 1e-3)), np.log10(hi), 60)
+        else:
+            b = np.linspace(lo, hi, 60)
         ax.hist(x_eval[:, j], bins=b, density=True, histtype="step",
                 color="tab:blue", label="Geant4")
         ax.hist(gen[:, j], bins=b, density=True, histtype="step",
