@@ -30,48 +30,71 @@ passes all four checks.
 
 ## 2. Setting up on the cluster
 
-**Host:** `macha.hep.fsu.edu`. Connection from mainland China is
-unstable (needs VPN). Harrison is sending documentation on using the cluster.
-From the meeting: you log into the cluster first, then to the GPU node. There
-is **one GPU on that node, shared with Sijil**, so coordinate before long runs.
-Use `tmux` or `screen` so jobs survive a dropped connection.
+Explored on 2026-09-13. Machines are `<name>.hep.fsu.edu`. There is **no job
+scheduler**: jobs run directly on a machine. The connection from mainland China
+is unstable (needs VPN). Harrison is sending documentation on using the cluster.
 
-```bash
-git clone https://github.com/sijil-jose/GSOC_2026_PINNDE.git
-cd GSOC_2026_PINNDE/Tina
-python3.12 -m venv .venv          # laptop uses 3.12.13
-.venv/bin/pip install torch "numpy<2" "scipy<1.14" scikit-learn matplotlib pytest h5py
-# jetnet (only for FPD/KPD) -- no-compiler recipe from README.md:
-.venv/bin/pip install --no-deps jetnet
-.venv/bin/pip install numba energyflow tables pandas awkward coffea pyyaml requests tqdm
-```
+| Machine | Role | What matters |
+|---|---|---|
+| `dagda` | login machine, file server for `/home`, Kerberos server | Ubuntu 24.04, 32 CPUs, 31 GB RAM, no GPU. Has tmux. SSH keys work. Python 3.12 cannot create venvs (python3.12-venv not installed). |
+| `macha` | compute machine: **run jobs here** | AlmaLinux 10.1, 64 CPUs, 125 GB RAM. Python 3.12 venvs work. **No tmux.** Password login only. |
+| `vilya`, `gandalf`, `frodo` | not needed so far | password login only |
 
-Laptop versions for reference: numpy 1.26.4, scipy 1.13.1, torch 2.13.0,
-scikit-learn 1.9.0.
+- **No usable GPU.** macha's only NVIDIA card is a GeForce GT 730 on the
+  open-source nouveau driver: no NVIDIA driver, no CUDA. The card is too old
+  for current CUDA and PyTorch, so installing a driver would not help. "One GPU
+  shared with Sijil" (from the meeting) is unconfirmed: ask Sijil which machine.
+- **Home folder** is dagda's disk (802 GB free), shared with macha over
+  Kerberos-protected NFS. On macha it is readable only with a Kerberos ticket,
+  which lasts 10 hours from login and renews without a password (`kinit -R`)
+  for up to 2 days. A longer job must renew it or it loses the home folder.
+- **Use tmux on dagda.** Start it there, then `ssh macha` inside it. The
+  dagda-to-macha link stays inside FSU, so it survives your own connection
+  dropping.
+- **The GitHub repo is private**, so `git clone` on the cluster asks for a
+  login. `~/GSOC_2026_PINNDE` on the cluster was made from a git bundle of the
+  laptop repo (`git bundle create repo.bundle main`, copy it over, `git clone
+  repo.bundle`, `git checkout main`), with `origin` set back to GitHub.
 
-**Data is not in git** (1.36 GB each, over GitHub's limit). Download into `Tina/`:
+Scripts in `cluster/`:
 
-```bash
-wget -O dataset_2_1.hdf5 "https://zenodo.org/records/6366271/files/dataset_2_1.hdf5?download=1"
-wget -O dataset_2_2.hdf5 "https://zenodo.org/records/6366271/files/dataset_2_2.hdf5?download=1"
-```
+- `check_node.sh` reports OS, Python (and whether venvs work), home folder,
+  disks, Kerberos ticket, GPU and internet access. Changes nothing.
+- `get_data.sh` downloads both ds2 files from Zenodo, resuming partial files,
+  and checks size and MD5 against the Zenodo record. Run it on dagda, whose own
+  disk holds `/home`. Only one run at a time; a second run waits.
+- `setup.sh`, run on macha: `.venv` with the laptop's exact package versions
+  (`cluster/requirements.txt`, with the CPU build of torch where there is no
+  NVIDIA driver), tests, GPU check, data check, `validate_classical`. Safe to
+  rerun. Its header has the tmux and ssh steps.
 
-(Check the file links on the Zenodo record page if those 404.)
+**Data is not in git** (1.36 GB each, over GitHub's limit). `cluster/get_data.sh`
+downloads it from https://zenodo.org/records/6366271. The laptop copies match
+the Zenodo MD5s. Zenodo was down for hours on 2026-09-13 (HTTP 504), so expect
+to rerun it.
 
 **Always run with** `OPENBLAS_NUM_THREADS=1`. Without it the sklearn classifier
 busy-waits and a 9-second evaluation looks like a 30-minute hang.
 
-**Verify the setup:**
+**Verify the setup** (`setup.sh` runs both):
 
 ```bash
 OPENBLAS_NUM_THREADS=1 .venv/bin/python -m pytest pinnde_eval/tests flow_matching/tests -q
 OPENBLAS_NUM_THREADS=1 .venv/bin/python -m pinnde_eval.validate_classical
 ```
 
-**GPU note:** `train_flow_matching` and `sample` take `device=`, but
-`flow_matching/demo_calo.py`'s `main()` does not pass one, so it runs on CPU.
-Add a `device` argument before using the GPU. Evaluation metrics (sklearn,
-scipy) stay on CPU regardless.
+**Status (2026-09-14): working on macha.** `setup.sh` ran end to end in 64
+minutes: 91 tests passed, both data files match the Zenodo MD5s, and
+`validate_classical` printed output identical to the laptop run. Most of the
+time was pip writing the 46,182 files of `.venv` (1.9 GB) onto the network home
+folder; the tests took 55 s (20 s on the laptop). Everything is in
+`~/GSOC_2026_PINNDE/Tina` on the cluster.
+
+**GPU note:** `python -m flow_matching.demo_calo --device cuda` trains and
+samples on a GPU; the metrics stay on CPU. Tested end to end on the laptop's
+Apple GPU (`device="mps"`), never on CUDA. A GPU run draws different random
+numbers from a CPU run with the same seed, so it will not reproduce the CPU
+numbers in DEVLOG exactly.
 
 ---
 
@@ -113,6 +136,14 @@ The "matching the energy band fixes it" pattern is not clean either: `E_tot`
 and `sparsity` improve, but two energy-independent controls get worse
 (`r_mean` 0.35 → 0.08), probably because the matched band holds only ~10% of the
 showers and is noisier.
+
+The calibration figure in `meeting_2026-08-31.md` is not evidence of a shift
+either. Its red histogram (file 1 vs file 2, KS on the 7 observables, 30
+disjoint 1,000-vs-1,000 splits) has 35 of 210 p-values below 0.1 against 21
+expected, and the document put that down to the energy difference. The figure
+uses the first 30,000 showers of each file; the next two blocks of 30,000 give
+12 and 20. Inside a single 1,000-vs-1,000 split the shift is only 0.2 to 0.4
+standard errors, too small to cause it.
 
 **Conclusion so far:** a 2σ difference between two independent random draws
 happens about 1 time in 20, so this is consistent with ordinary sampling noise.
@@ -158,7 +189,8 @@ If this changes the plan from what was agreed, say so at the next meeting.
   the headline null floor (AUC 0.4971, SWD 0.0222, sep 0.0030) is a **single**
   N=8000 comparison, and AUC's ± comes from 5 classifier retrainings on that one
   pair; the separation-power floor used up to 4 repeats per N; the midterm
-  stability study used 6; the Sinkhorn floor (0.4151 ± 0.077) used 3. Rerun the
+  stability study used 6; the Sinkhorn floor (0.4151 ± 0.077) was recorded as 3
+repeats, but no script in the repo produces it, so that cannot be checked. Rerun the
   headline floor and the Sinkhorn floor over ≥10 disjoint repeats and correct
   the numbers at the next meeting.
 - **Sinkhorn vs the paper's metrics** (Harrison's original question, still not
@@ -185,11 +217,15 @@ So they are not repeated:
 
 | Said | Actually |
 |---|---|
-| floors repeated 10–15 times | none were: headline floor is 1 comparison (AUC ± from 5 retrainings), separation-power floor ≤4 repeats, stability study 6, Sinkhorn 3 |
+| floors repeated 10–15 times | none were: headline floor is 1 comparison (AUC ± from 5 retrainings), separation-power floor ≤4 repeats, stability study 6, Sinkhorn recorded as 3 (no script to check) |
 | real dimension "around 136-ish" | **~360** features for the CaloChallenge classifier on ds2 |
 | AD "can tell 60% at N=250", most powerful | that table combined p-values with Fisher, which over-rejects. With Bonferroni and 50 repeats: all three tests near chance at N=250; AD modestly ahead at every N (0.62 vs KS 0.50 at N=2000). A correction note is now in `meeting_2026-08-31.md` |
 | shift in "total energy", "0.03 or 0.3" | shift in **incident** energy; mean log E_inc differs by 0.034 on 30k showers, **0.018 on all 100k** (2.00σ) |
 | dataset 2 "a little bit bigger" | file 2's mean log E_inc is higher, but KS on E_inc gives p = 0.101 on the full data — consistent with noise |
+| the 7 observables are "the compression the CaloChallenge people do" (agreed) | they are our own whole-shower summaries. The CaloChallenge's high-level features are per layer: 362 for ds2, counted by running their `evaluate.py` feature code on 200 showers |
+| KS, CvM and AD "produce different and independent insights" | on the same data they almost always agree: rank correlation of their statistics 0.86–0.97 per observable over 100 disjoint 1,000-vs-1,000 null splits (CvM–AD 0.95–0.97) |
+| Sinkhorn floor from "a thousand points", repeated "15 times" | no script in the repo produces 0.4151 ± 0.077, so neither the sample size nor the repeat count can be checked. The ≥10-repeat rerun should be a committed script |
+| cluster: "I tried to set up everything. It's currently okay." | nothing was installed then, and there is no usable GPU on the cluster (section 2) |
 
 ---
 

@@ -18,8 +18,10 @@ z-scored with the training statistics and inverted after sampling.
 Run from the ``Tina`` folder with both ds2 files present:
 
     python -m flow_matching.demo_calo
+    python -m flow_matching.demo_calo --device cuda    # train and sample on the GPU
 """
 
+import argparse
 import os
 import sys
 
@@ -148,7 +150,7 @@ def compare_to_floor(res, title, floor):
 
 def main(n_train=100000, n_eval=8000, n_steps=30000, hidden=384, depth=5,
          ode_steps=200, seed=0, plot_path=None, data_dir=None,
-         dequantize=True, per_layer=False):
+         dequantize=True, per_layer=False, device="cpu"):
     """Train and score p(observables | E_inc) on real ds2. ~20 min on CPU.
 
     The defaults are the configuration that actually fixes the low-energy
@@ -162,6 +164,10 @@ def main(n_train=100000, n_eval=8000, n_steps=30000, hidden=384, depth=5,
     incident energy 98 of the 187 columns put over half their mass on a single
     value (an empty layer has sparsity exactly 1 and radial centre exactly 0),
     so the effective dimension collapses where the model already struggled.
+
+    ``device="cuda"`` trains and samples on the GPU; the metrics run on CPU
+    either way. The GPU draws its own random numbers, so a GPU run is a
+    different random realisation from a CPU run with the same seed.
     """
     data_dir = data_dir or os.path.abspath(
         os.path.join(os.path.dirname(__file__), ".."))
@@ -200,7 +206,7 @@ def main(n_train=100000, n_eval=8000, n_steps=30000, hidden=384, depth=5,
     model, history = train_flow_matching(
         torch.tensor(z_train, dtype=torch.float32), dim=len(names),
         cond=torch.tensor(c_train, dtype=torch.float32),
-        n_steps=n_steps, hidden=hidden, depth=depth,
+        n_steps=n_steps, hidden=hidden, depth=depth, device=device,
         seed=seed, monitor_every=max(1, n_steps // 8),
         monitor_real=torch.tensor(tf.forward(x_eval), dtype=torch.float32),
         monitor_cond=torch.tensor(c_eval, dtype=torch.float32),
@@ -213,7 +219,7 @@ def main(n_train=100000, n_eval=8000, n_steps=30000, hidden=384, depth=5,
     # units so every number below is in the observables' real scale.
     z_gen = sample(model, n_eval, len(names),
                    cond=torch.tensor(c_eval, dtype=torch.float32),
-                   steps=ode_steps, seed=seed)
+                   steps=ode_steps, device=device, seed=seed)
     gen = tf.inverse(z_gen.detach().cpu().numpy())
 
     print()
@@ -340,9 +346,13 @@ def _plot(x_eval, c_eval, gen, names, path):
 
 
 if __name__ == "__main__":
-    # --per-layer models the 187-column space instead of the 7 core observables.
-    per_layer = "--per-layer" in sys.argv
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--per-layer", action="store_true",
+                        help="model the 187-column space instead of the 7 core observables")
+    parser.add_argument("--device", default="cpu",
+                        help="where to train and sample, e.g. cuda (default: cpu)")
+    args = parser.parse_args()
     out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "figures")
-    name = "fm_calo_per_layer.png" if per_layer else "fm_calo.png"
-    main(per_layer=per_layer,
+    name = "fm_calo_per_layer.png" if args.per_layer else "fm_calo.png"
+    main(per_layer=args.per_layer, device=args.device,
          plot_path=os.path.join(out, name) if os.path.isdir(out) else None)
