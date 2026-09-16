@@ -37,20 +37,21 @@ is unstable (needs VPN). Harrison is sending documentation on using the cluster.
 | Machine | Role | What matters |
 |---|---|---|
 | `dagda` | login machine, file server for `/home`, Kerberos server | Ubuntu 24.04, 32 CPUs, 31 GB RAM, no GPU. Has tmux. SSH keys work. Python 3.12 cannot create venvs (python3.12-venv not installed). |
-| `macha` | compute machine: **run jobs here** | AlmaLinux 10.1, 64 CPUs, 125 GB RAM. Python 3.12 venvs work. **No tmux.** Password login only. |
+| `macha` | CPU compute machine | AlmaLinux 10.1, 64 CPUs, 125 GB RAM. Python 3.12 venvs work. **No tmux.** Its only NVIDIA card (GeForce GT 730) cannot run CUDA. Password login only. |
+| `credne` | **GPU machine**, shared with Sijil | Ubuntu 24.04, 32 CPUs, 251 GB RAM, **NVIDIA GeForce RTX 5090 (32 GB)**, driver 580.173.02 (CUDA 13.0). Has tmux. Python 3.12 (Miniforge) venvs work. Local `/scratch`, 7.3 TB. Password login only. |
 | `vilya`, `gandalf`, `frodo` | not needed so far | password login only |
 
-- **No usable GPU.** macha's only NVIDIA card is a GeForce GT 730 on the
-  open-source nouveau driver: no NVIDIA driver, no CUDA. The card is too old
-  for current CUDA and PyTorch, so installing a driver would not help. "One GPU
-  shared with Sijil" (from the meeting) is unconfirmed: ask Sijil which machine.
+- **GPU work runs on credne** (`credne.hep.fsu.edu`; it is not in dagda's host
+  list). The GPU is shared with Sijil, so check `nvidia-smi` before long runs.
+  The standard torch 2.13.0 on PyPI is built for CUDA 13.0, which credne's
+  driver supports. macha's GT 730 is too old for current CUDA and PyTorch.
 - **Home folder** is dagda's disk (802 GB free), shared with macha over
   Kerberos-protected NFS. On macha it is readable only with a Kerberos ticket,
   which lasts 10 hours from login and renews without a password (`kinit -R`)
   for up to 2 days. A longer job must renew it or it loses the home folder.
-- **Use tmux on dagda.** Start it there, then `ssh macha` inside it. The
-  dagda-to-macha link stays inside FSU, so it survives your own connection
-  dropping.
+- **Run long jobs inside tmux.** credne has it. macha does not: start tmux on
+  dagda and `ssh macha` inside it. The dagda-to-macha link stays inside FSU, so
+  it survives your own connection dropping.
 - **The GitHub repo is private**, so `git clone` on the cluster asks for a
   login. `~/GSOC_2026_PINNDE` on the cluster was made from a git bundle of the
   laptop repo (`git bundle create repo.bundle main`, copy it over, `git clone
@@ -63,10 +64,12 @@ Scripts in `cluster/`:
 - `get_data.sh` downloads both ds2 files from Zenodo, resuming partial files,
   and checks size and MD5 against the Zenodo record. Run it on dagda, whose own
   disk holds `/home`. Only one run at a time; a second run waits.
-- `setup.sh`, run on macha: `.venv` with the laptop's exact package versions
+- `setup.sh`: a venv with the laptop's exact package versions
   (`cluster/requirements.txt`, with the CPU build of torch where there is no
   NVIDIA driver), tests, GPU check, data check, `validate_classical`. Safe to
-  rerun. Its header has the tmux and ssh steps.
+  rerun. Each machine needs its own venv because the home folder is shared:
+  macha uses the default `.venv`; on credne pass `VENV=` a local path. Its
+  header has the tmux and ssh steps.
 
 **Data is not in git** (1.36 GB each, over GitHub's limit). `cluster/get_data.sh`
 downloads it from https://zenodo.org/records/6366271. The laptop copies match
@@ -83,12 +86,19 @@ OPENBLAS_NUM_THREADS=1 .venv/bin/python -m pytest pinnde_eval/tests flow_matchin
 OPENBLAS_NUM_THREADS=1 .venv/bin/python -m pinnde_eval.validate_classical
 ```
 
-**Status (2026-09-14): working on macha.** `setup.sh` ran end to end in 64
-minutes: 91 tests passed, both data files match the Zenodo MD5s, and
-`validate_classical` printed output identical to the laptop run. Most of the
-time was pip writing the 46,182 files of `.venv` (1.9 GB) onto the network home
-folder; the tests took 55 s (20 s on the laptop). Everything is in
-`~/GSOC_2026_PINNDE/Tina` on the cluster.
+**Status: working on both machines** (cluster time: macha 2026-09-14, credne
+2026-09-15). `setup.sh` ran end to end on each, in 64 and 66 minutes.
+
+- **macha:** 91 tests passed (55 s), both data files match the Zenodo MD5s, and
+  `validate_classical` printed output identical to the laptop run. Venv in
+  `Tina/.venv`, 46,182 files, 1.9 GB.
+- **credne:** torch 2.13.0+cu130 on the RTX 5090, a 200-step training and 1,000
+  samples on the GPU, 91 tests (33 s), data MD5s and `validate_classical` fine.
+  Venv in `~/venvs/credne`, 47,162 files, 5.7 GB.
+
+Most of each hour was pip writing those small files onto the network home
+folder, which is the price of a shared home. `/scratch` on credne is
+admin-only, so a local venv needs the admin to create `/scratch/<username>`.
 
 **GPU note:** `python -m flow_matching.demo_calo --device cuda` trains and
 samples on a GPU; the metrics stay on CPU. Tested end to end on the laptop's
