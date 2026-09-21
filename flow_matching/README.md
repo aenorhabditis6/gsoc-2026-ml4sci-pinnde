@@ -47,6 +47,34 @@ python -m flow_matching.demo_calo         # the same on real ds2 showers
 pytest flow_matching/tests -q
 ```
 
+`demo_calo` works in one of three spaces, and on the GPU when asked:
+
+```bash
+python -m flow_matching.demo_calo --features core                # 7 observables
+python -m flow_matching.demo_calo --features per-layer           # 187 columns
+python -m flow_matching.demo_calo --features official --device cuda  # the challenge's 362
+```
+
+In the official space, how the features are *parameterised* matters more than
+model size. The settings that were measured, best first:
+
+```bash
+# an empty layer is an exact value, not a small one: log10 E = -8, centres and
+# widths 0, sparsity 1, in 17.8% of all (layer, shower) pairs. A continuous flow
+# hits an exact value 0% of the time. --atom-snap gives that point mass a region
+# to land in during training and snaps the whole layer back when sampling.
+python -m flow_matching.demo_calo --features official --atom-snap   # chi2 45.5 -> 9.4
+
+# add this when the energy response has to be right: it models E_tot as
+# log10(E_tot / E_inc) and puts the totals on the floor, for a little chi2
+python -m flow_matching.demo_calo --features official --atom-snap --relative-energy total
+```
+
+`--positive-sqrt` (widths as sqrt(x)) and `--energy-sqrt` (layer energies as
+sqrt(E/E_inc)) are kept for the record and are **not** recommended: the first is
+subsumed by `--atom-snap`, the second is much worse. DEVLOG §24 says why, with
+numbers.
+
 ```python
 from flow_matching import train_flow_matching, sample
 model, history = train_flow_matching(data, dim=2)   # data: (N, d) tensor

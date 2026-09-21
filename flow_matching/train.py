@@ -16,8 +16,14 @@ from .model import VelocityField
 def train_flow_matching(data, dim, cond=None, n_steps=4000, batch_size=256,
                         lr=1e-3, hidden=128, depth=3, time_dim=64, device="cpu",
                         seed=0, monitor_every=0, monitor_real=None,
-                        monitor_cond=None, monitor_n=2000, sample_steps=50):
+                        monitor_cond=None, monitor_n=2000, sample_steps=50,
+                        clip_grad=None):
     """Train a ``VelocityField`` on ``data`` (N, d). Returns (model, history).
+
+    ``clip_grad`` caps the gradient norm of every step. A deep velocity field
+    can be knocked into a bad region by one unusually large step and never
+    recover: at d=361 the loss jumped from 1.19 to 1.46 mid-training and two
+    generated showers later diverged to NaN. Clipping bounds that step.
 
     ``cond`` (N, c), aligned row-by-row with ``data``, makes the model
     conditional: it learns v_theta(x, t, c) and ``sample`` then needs a
@@ -51,6 +57,8 @@ def train_flow_matching(data, dim, cond=None, n_steps=4000, batch_size=256,
                        generator=g)
         opt.zero_grad()
         loss.backward()
+        if clip_grad:
+            torch.nn.utils.clip_grad_norm_(model.parameters(), clip_grad)
         opt.step()
         sched.step()
 

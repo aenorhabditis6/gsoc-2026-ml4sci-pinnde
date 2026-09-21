@@ -64,6 +64,25 @@ def test_training_reduces_loss():
     assert np.mean(losses[-3:]) < np.mean(losses[:3])
 
 
+def test_gradient_clipping_bounds_the_step_and_still_learns():
+    rng = np.random.default_rng(0)
+    data = torch.tensor(rng.normal(size=(4000, 2)) * 0.5 + 2.0, dtype=torch.float32)
+    _, history = train_flow_matching(
+        data, dim=2, n_steps=600, monitor_every=50, seed=0, clip_grad=1.0,
+    )
+    losses = [loss for _, loss, _, _ in history]
+    assert np.mean(losses[-3:]) < np.mean(losses[:3])
+
+    # the cap actually binds: an unclipped step on this data is larger
+    from flow_matching.model import VelocityField
+    from flow_matching.core import fm_loss
+    model = VelocityField(2, seed=0)
+    fm_loss(model, data[:256]).backward()
+    before = torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+    after = torch.sqrt(sum(p.grad.pow(2).sum() for p in model.parameters()))
+    assert float(before) > 1.0 and float(after) <= 1.0 + 1e-5
+
+
 def test_training_moves_samples_toward_data():
     # A shifted Gaussian: a trained model should match it far better than the
     # untrained (random-init) model does.
