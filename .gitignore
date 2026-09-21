@@ -11,3 +11,11 @@ __pycache__/
 *.pt
 data/
 sijil_data/
+
+# CaloChallenge code fetched on demand (no licence, so never committed)
+calochallenge_code/
+# cached feature extractions (hundreds of MB)
+calochallenge_cache/
+*.npz
+# saved per-repeat floor numbers (regenerable)
+floor_results/

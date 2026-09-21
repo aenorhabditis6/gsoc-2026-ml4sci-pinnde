@@ -295,6 +295,37 @@ Checks, on real ds2 (needs both files, loads all 200k showers):
 python -m pinnde_eval.validate_classical
 ```
 
+## The CaloChallenge's own 362 features (`calochallenge.py`)
+
+Our observables are our own summaries. To compare with published submissions we
+need the features the challenge's classifier actually reads, computed their way.
+For dataset 2 that is **362 numbers per shower**: incident energy, per-layer
+energies, centres and widths in eta and phi, total energy, per-layer sparsity,
+and radial centres and widths.
+
+```python
+from pinnde_eval.calochallenge import official_features_from_file
+
+feats, names, e_inc = official_features_from_file("dataset_2_1.hdf5", 100000,
+                                                  cache="cache/ds2_1.npz")
+feats.shape        # (100000, 362)
+```
+
+The module downloads their code on demand into `calochallenge_code/`, pinned to
+one commit and checked by MD5. Their repository carries no licence, so nothing
+from it is committed here. `tests/test_calochallenge.py` checks our column
+assembly against their own `prepare_high_data_for_classifier` on real showers,
+and checks the two columns we can compute independently (layer energy, layer
+sparsity) against `observables.py`.
+
+The floor in that space, over disjoint repeats, with pairs drawn both from the
+same file (sampling noise only) and from different files (what a model is
+scored against):
+
+```bash
+python -m pinnde_eval.validate_official
+```
+
 ## Reproducibility
 
 Everything stochastic (classifier splits/inits, projections, bandwidth
@@ -331,6 +362,14 @@ pytest pinnde_eval/tests -q
   the HDF5 loader. This is the `features_fn` for real data.
 - `validate_calo.py` — null test and separation-power floor law on real Geant4
   showers.
+- `calochallenge.py` — the challenge's own 362 features for ds2, computed with
+  their code (downloaded on demand, pinned by commit and MD5).
+- `floors.py` — the pairing rules every floor rests on: disjoint pairs inside
+  one file, across the two files, or matched shower by shower in incident
+  energy, plus the scoring and reporting.
+- `validate_floors.py`, `validate_official.py`, `validate_matched.py` — the
+  floors themselves, over disjoint repeats: our 7 and 187 columns, the
+  challenge's 362, and the energy-matched floor a conditional model faces.
 - `stability.py` — metric behaviour vs. sample size: null floor, spread,
   separation z, minimum resolvable N. Runnable as a module.
 - `local.py` — local discrepancy maps: MMD witness, out-of-fold P(real|x),

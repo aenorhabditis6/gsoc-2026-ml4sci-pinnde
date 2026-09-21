@@ -23,9 +23,12 @@ Two study/diagnostic layers sit on top of the metrics:
   two distributions disagree instead of returning one global number.
 """
 
+from .calochallenge import official_features, official_features_from_file
 from .classical import (combine_pvalues, pvalue_uniformity, report_tests,
                         two_sample_tests)
 from .evaluate import evaluate, evaluate_by_condition, report, plot_histograms
+from .floors import (match_by_energy, pairs_across_files, pairs_matched_energy,
+                     pairs_within_file, score_pairs)
 from .local import binned_residual_map, classifier_discrepancy, mmd_witness
 from .observables import (Geometry, GEOMETRIES, READOUT_THRESHOLD_MEV,
                           discrete_observables, layer_energies,
@@ -53,6 +56,13 @@ __all__ = [
     "swd",
     "sinkhorn",
     "median_bandwidth",
+    "official_features",
+    "official_features_from_file",
+    "pairs_across_files",
+    "pairs_within_file",
+    "pairs_matched_energy",
+    "match_by_energy",
+    "score_pairs",
     "two_sample_tests",
     "combine_pvalues",
     "pvalue_uniformity",
