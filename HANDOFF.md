@@ -41,7 +41,7 @@ the meeting documents) and `sijil_data/` (gitignored). Not committed either:
 `calochallenge_code/` (their code, no licence, downloaded on demand),
 `calochallenge_cache/` and `floor_results/` (large, regenerable).
 
-Tests: 101 passing with the two ds2 files present; without them expect a few
+Tests: 171 passing with the two ds2 files present; without them expect a few
 skips (the real-data tests skip themselves).
 `python -m pinnde_eval.validate_classical` passes all four checks.
 

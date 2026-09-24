@@ -250,7 +250,7 @@ wrong; two plausible fixes (dequantization, more ODE steps) moved it by under
 ## Tests
 
 ```bash
-python -m pytest pinnde_eval/tests flow_matching/tests -q     # 91 tests
+python -m pytest pinnde_eval/tests flow_matching/tests -q     # 171 tests
 ```
 
 The CaloChallenge observable tests run on synthetic voxel grids with

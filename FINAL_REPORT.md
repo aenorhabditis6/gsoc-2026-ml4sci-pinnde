@@ -115,7 +115,14 @@ correction.
 reading of "chi2 improved fourfold, the classifier did not move" is that what
 remains is cross-layer correlation. Install this model's marginals into Geant4's
 exact correlation structure and the result is still detectable at 0.916, against
-0.929 for the model itself. Per-feature accuracy is what the classifier reads.
+0.929 for the model itself, so per-feature accuracy is what the classifier
+reads.
+
+That test is only well posed where no point masses couple the columns together,
+so it was run on the front ten layers, which are almost never empty. Those are
+also the layers where the empty-layer fix does the least. Whether correlations
+dominate in the deep layers is untested, and the same method cannot answer it
+there.
 
 ## 4. What does not work yet
 
@@ -124,18 +131,21 @@ after. Every gain is in the marginal metrics and in physical validity.
 
 **Voxel generation.** `demo_voxels.py` makes every consistency rule hold
 automatically, because the features are computed from a voxel grid rather than
-predicted as separate numbers. It does not work: every generated shower deposits
+predicted as separate numbers. It does not work: in every run tried, each generated shower deposits
 more than ten times the energy it received. The log representation has no
 ceiling, 22.4% of generated layers hold more energy than any layer in the real
 data, and those layers carry essentially all of the model's energy. More data
 and more training changed nothing, so this is not undertraining.
 
 **One result is unexplained.** A rank-Gaussian feature transform makes every
-marginal exactly right by construction. It halves chi2 (11.7 → 5.9 times the
-floor), collapses the seed spread from 2.3 to 0.1, and removes every impossible
-value, the best physical validity measured. It also makes the classifier worse,
-0.894 → 0.956. The obvious explanation, noise from dithering tied values, was
-tested and ruled out at 1–7% of variance. The cause is not identified.
+marginal exactly right by construction. Over three seeds it halves chi2 (11.7 to
+5.9 times the floor), collapses the seed spread from 2.3 to 0.1, and removes
+every impossible value, the best physical validity measured. It also makes the
+classifier worse, 0.894 to 0.956. The obvious explanation, noise from dithering
+tied values, was tested and ruled out at 1 to 7 percent of variance. The cause
+is not identified. This is three seeds against five for the numbers above, and
+it was measured in the last days of the program, so it is the least settled
+result here.
 
 ## 5. Reproducing it
 
