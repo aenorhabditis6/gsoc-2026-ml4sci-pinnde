@@ -1,4 +1,4 @@
-# Handoff — flow-matching track
+# Handoff, flow-matching track
 
 For the next working session (likely on the cluster). Read this first.
 Written 2026-09-13, after the meeting that covered the classical tests and Sinkhorn.
@@ -9,36 +9,36 @@ Written 2026-09-13, after the meeting that covered the classical tests and Sinkh
 
 Pushed on 2026-09-13 (the push promised at the meeting):
 
-- `pinnde_eval/classical.py` — KS, Cramér–von Mises, Anderson–Darling, `combine_pvalues`
-- `pinnde_eval/validate_classical.py` — calibration, energy difference between
+- `pinnde_eval/classical.py`: KS, Cramér–von Mises, Anderson–Darling, `combine_pvalues`
+- `pinnde_eval/validate_classical.py`: calibration, energy difference between
   the two files, power, and p-value independence checks
-- `pinnde_eval/tests/test_classical.py` — tests for the above
-- `pinnde_eval/tier3.py` — `sinkhorn()`; `evaluate.py`, `__init__.py` — wired in
-- `flow_matching/demo_calo.py` — E_tot histogram binning fix (the per-layer option was pushed earlier)
+- `pinnde_eval/tests/test_classical.py`: tests for the above
+- `pinnde_eval/tier3.py`: `sinkhorn()`; `evaluate.py`, `__init__.py`: wired in
+- `flow_matching/demo_calo.py`: E_tot histogram binning fix (the per-layer option was pushed earlier)
 - `make_classical_figures.py`, `make_postmidterm_figures.py` and their figures
-- `meeting_2026-08-17.md`, `meeting_2026-08-31.md` — as presented
+- `meeting_2026-08-17.md`, `meeting_2026-08-31.md`: as presented
 - READMEs updated for the new module; this file
 
 Added 2026-09-14 to 09-16:
 
-- `cluster/` — `check_node.sh`, `get_data.sh`, `setup.sh`, `requirements.txt`
+- `cluster/`: `check_node.sh`, `get_data.sh`, `setup.sh`, `requirements.txt`
   (section 2)
-- `pinnde_eval/calochallenge.py` — the challenge's own 362 features for ds2,
+- `pinnde_eval/calochallenge.py`: the challenge's own 362 features for ds2,
   computed with their code, plus `tests/test_calochallenge.py`
-- `pinnde_eval/floors.py` — the pairing rules behind every floor (disjoint
+- `pinnde_eval/floors.py`: the pairing rules behind every floor (disjoint
   pairs inside a file, across files, or matched in incident energy), plus
   `tests/test_floors.py`
 - `pinnde_eval/validate_floors.py`, `validate_official.py`,
-  `validate_matched.py` — the floors themselves over 10 disjoint repeats, and
+  `validate_matched.py`: the floors themselves over 10 disjoint repeats, and
   how large a difference the null test can actually see
-- `flow_matching/demo_calo.py` — `--features {core,per-layer,official}`,
+- `flow_matching/demo_calo.py`: `--features {core,per-layer,official}`,
   `--device`, and `NULL_FLOORS` replaced by the energy-matched floors
-- `pinnde_eval/DEVLOG.md` — §17 classical tests and Sinkhorn, §18 the 362
+- `pinnde_eval/DEVLOG.md`: §17 classical tests and Sinkhorn, §18 the 362
   features, §19 checking the claims before making them
 
 Kept local on purpose: `slides_postmidterm.md` (an early draft, superseded by
 the meeting documents) and `sijil_data/` (gitignored). Not committed either:
-`calochallenge_code/` (their code, no licence — downloaded on demand),
+`calochallenge_code/` (their code, no licence, downloaded on demand),
 `calochallenge_cache/` and `floor_results/` (large, regenerable).
 
 Tests: 101 passing with the two ds2 files present; without them expect a few
@@ -49,27 +49,25 @@ skips (the real-data tests skip themselves).
 
 ## 2. Setting up on the cluster
 
-Explored on 2026-09-13. Machines are `<name>.hep.fsu.edu`. There is **no job
+Explored on 2026-09-13. Machines are `<name>.the cluster`. There is **no job
 scheduler**: jobs run directly on a machine. The connection from mainland China
 is unstable (needs VPN). Harrison is sending documentation on using the cluster.
 
 | Machine | Role | What matters |
 |---|---|---|
-| `dagda` | login machine, file server for `/home`, Kerberos server | Ubuntu 24.04, 32 CPUs, 31 GB RAM, no GPU. Has tmux. SSH keys work. Python 3.12 cannot create venvs (python3.12-venv not installed). |
-| `macha` | CPU compute machine | AlmaLinux 10.1, 64 CPUs, 125 GB RAM. Python 3.12 venvs work. **No tmux.** Its only NVIDIA card (GeForce GT 730) cannot run CUDA. Password login only. |
-| `credne` | **GPU machine**, shared with Sijil | Ubuntu 24.04, 32 CPUs, 251 GB RAM, **NVIDIA GeForce RTX 5090 (32 GB)**, driver 580.173.02 (CUDA 13.0). Has tmux. Python 3.12 (Miniforge) venvs work. Local `/scratch`, 7.3 TB. Password login only. |
-| `vilya`, `gandalf`, `frodo` | not needed so far | password login only |
+| login machine | file server for `/home`, Kerberos server | Ubuntu 24.04, 32 CPUs, 31 GB RAM, no GPU. Has tmux. SSH keys work. Python 3.12 cannot create venvs (python3.12-venv not installed). |
+| CPU machine | CPU compute | AlmaLinux 10.1, 64 CPUs, 125 GB RAM. Python 3.12 venvs work. **No tmux.** Its only NVIDIA card (GeForce GT 730) cannot run CUDA. Password login only. |
+| GPU machine | shared with the other track | Ubuntu 24.04, 32 CPUs, 251 GB RAM, **NVIDIA GeForce RTX 5090 (32 GB)**, driver 580.173.02 (CUDA 13.0). Has tmux. Python 3.12 (Miniforge) venvs work. Local `/scratch`, 7.3 TB. Password login only. |
+| three others | not needed so far | password login only |
 
-- **GPU work runs on credne** (`credne.hep.fsu.edu`; it is not in dagda's host
-  list). The GPU is shared with Sijil, so check `nvidia-smi` before long runs.
-  The standard torch 2.13.0 on PyPI is built for CUDA 13.0, which credne's
-  driver supports. macha's GT 730 is too old for current CUDA and PyTorch.
-- **Home folder** is dagda's disk (802 GB free), shared with macha over
-  Kerberos-protected NFS. On macha it is readable only with a Kerberos ticket,
+- **GPU work runs on the GPU machine** (it is not in the login machine's host list). The GPU is shared with Sijil, so check `nvidia-smi` before long runs.
+  The standard torch 2.13.0 on PyPI is built for CUDA 13.0, which its driver supports. The CPU machine's card is too old for current CUDA and PyTorch.
+- **Home folder** is the login machine's disk (802 GB free), shared with the CPU machine over
+  Kerberos-protected NFS. On the CPU machine it is readable only with a Kerberos ticket,
   which lasts 10 hours from login and renews without a password (`kinit -R`)
   for up to 2 days. A longer job must renew it or it loses the home folder.
-- **Run long jobs inside tmux.** credne has it. macha does not: start tmux on
-  dagda and `ssh macha` inside it. The dagda-to-macha link stays inside FSU, so
+- **Run long jobs inside tmux.** The GPU machine has it. The CPU machine does not: start tmux on
+  the login machine and ssh to the CPU machine inside it. The link between them stays inside the university network, so
   it survives your own connection dropping.
 - **The GitHub repo is private**, so `git clone` on the cluster asks for a
   login. `~/GSOC_2026_PINNDE` on the cluster was made from a git bundle of the
@@ -81,13 +79,12 @@ Scripts in `cluster/`:
 - `check_node.sh` reports OS, Python (and whether venvs work), home folder,
   disks, Kerberos ticket, GPU and internet access. Changes nothing.
 - `get_data.sh` downloads both ds2 files from Zenodo, resuming partial files,
-  and checks size and MD5 against the Zenodo record. Run it on dagda, whose own
-  disk holds `/home`. Only one run at a time; a second run waits.
+  and checks size and MD5 against the Zenodo record. Run it on the login machine, whose own disk holds `/home`. Only one run at a time; a second run waits.
 - `setup.sh`: a venv with the laptop's exact package versions
   (`cluster/requirements.txt`, with the CPU build of torch where there is no
   NVIDIA driver), tests, GPU check, data check, `validate_classical`. Safe to
   rerun. Each machine needs its own venv because the home folder is shared:
-  macha uses the default `.venv`; on credne pass `VENV=` a local path. Its
+  the CPU machine uses the default `.venv`; on the GPU machine pass `VENV=` a local path. Its
   header has the tmux and ssh steps.
 
 **Data is not in git** (1.36 GB each, over GitHub's limit). `cluster/get_data.sh`
@@ -105,19 +102,17 @@ OPENBLAS_NUM_THREADS=1 .venv/bin/python -m pytest pinnde_eval/tests flow_matchin
 OPENBLAS_NUM_THREADS=1 .venv/bin/python -m pinnde_eval.validate_classical
 ```
 
-**Status: working on both machines** (cluster time: macha 2026-09-14, credne
-2026-09-15). `setup.sh` ran end to end on each, in 64 and 66 minutes.
+**Status: working on both machines** (2026-09-14 and 2026-09-15). `setup.sh` ran end to end on each, in 64 and 66 minutes.
 
-- **macha:** 91 tests passed (55 s), both data files match the Zenodo MD5s, and
+- **CPU machine:** 91 tests passed (55 s), both data files match the Zenodo MD5s, and
   `validate_classical` printed output identical to the laptop run. Venv in
   `Tina/.venv`, 46,182 files, 1.9 GB.
-- **credne:** torch 2.13.0+cu130 on the RTX 5090, a 200-step training and 1,000
+- **GPU machine:** torch 2.13.0+cu130 on the RTX 5090, a 200-step training and 1,000
   samples on the GPU, 91 tests (33 s), data MD5s and `validate_classical` fine.
-  Venv in `~/venvs/credne`, 47,162 files, 5.7 GB.
+  Venv in `~/venvs/the GPU machine`, 47,162 files, 5.7 GB.
 
 Most of each hour was pip writing those small files onto the network home
-folder, which is the price of a shared home. `/scratch` on credne is
-admin-only, so a local venv needs the admin to create `/scratch/<username>`.
+folder, which is the price of a shared home. `/scratch` on the GPU machine is admin-only, so a local venv needs the admin to create `/scratch/<username>`.
 
 **GPU note:** `python -m flow_matching.demo_calo --device cuda` trains and
 samples on a GPU; the metrics stay on CPU. Tested end to end on the laptop's
@@ -148,7 +143,7 @@ numbers in DEVLOG exactly.
 
 ### A. Get the cluster working (section 2)
 
-### B. The energy shift — probably sampling noise, decide before correcting
+### B. The energy shift, probably sampling noise, decide before correcting
 
 The numbers shown at the meeting came from 30,000 showers per file. On **all
 100,000 per file** the effect is smaller:
@@ -194,7 +189,7 @@ independent random draws happens about 1 time in 20, and in the full feature
 space it leaves no trace at all. Say this at the next meeting, since the meeting
 agreed to correct dataset 1.
 
-**If it is corrected anyway — do not "rescale" the energies.** In the meeting this was
+**If it is corrected anyway, do not "rescale" the energies.** In the meeting this was
 described as rescaling, and Harrison agreed to rescaling. But the two files do
 not differ by a calibration offset; they each drew a different random sample of
 incident energies. Multiplying shower energies would change the physics in each
@@ -218,11 +213,11 @@ assembly against their own `prepare_high_data_for_classifier` on real showers,
 and our layer energies and sparsities against `observables.py`.
 `flow_matching/demo_calo.py --features official` trains in that space, and
 `python -m pinnde_eval.validate_official` measures the floor there over 10
-disjoint repeats — both from pairs inside one file (sampling noise alone) and
+disjoint repeats, both from pairs inside one file (sampling noise alone) and
 across the two files (what a model is scored against), which also answers
 item B in the space that matters.
 
-**First model run there (2026-09-16, 96 seconds on credne's GPU).** The
+**First model run there (2026-09-16, 96 seconds on the GPU machine's GPU).** The
 configuration that works at d=7 fails comprehensively at d=362: AUC 0.9861
 against the matched floor of 0.5003, separation power 75× the floor, combined
 KS exactly 0, and up to 37% of generated deep-layer energies outside the Geant4
@@ -234,7 +229,7 @@ story. DEVLOG §20.
 
 - *The harness is sound.* `demo_calo --null` puts real Geant4 showers at matched
   energies in the model's place and lands on the floor at d=7 and d=362. It also
-  exposed three bugs — KS rejecting values moved by 1e-17, the range check
+  exposed three bugs, KS rejecting values moved by 1e-17, the range check
   counting rounding as impossible, and the quantizer returning sparsity values
   one bit off the data's (which made KS reject even a perfect generator). All
   three are fixed and pinned by tests; only the model runs' KS and out-of-range
@@ -285,7 +280,7 @@ story. DEVLOG §20.
   the best overall agreement (chi² 9.4 vs 11.7); adding `--relative-energy
   total` costs that and buys the energy response, putting the totals family on
   the floor (0.502 vs 0.697/0.612, floor 0.5003). For a calorimeter the sampling
-  fraction has to be right, so the trade is worth it — but say which one a
+  fraction has to be right, so the trade is worth it, but say which one a
   number came from. The other earlier fixes no longer help on top of it: sqrt
   widths cost chi² 9.4 → 12.6, because the atom was what they were really
   fixing (23% of width values are the empty-layer 0).
@@ -299,7 +294,7 @@ story. DEVLOG §20.
   shower) pairs and 51% of the last layer. A continuous flow puts zero
   probability on any exact value, so it produced an exactly-empty layer **0.0%**
   of the time. `--atom-snap` spreads the point mass over the empty gap above it
-  during training and snaps everything in that gap back when sampling — the
+  during training and snaps everything in that gap back when sampling, the
   treatment the sparsity comb already had.
 - **Emptiness belongs to the layer, not the column.** Doing this column by
   column made things worse (AUC 0.968): it generated layers with no energy but a
@@ -308,7 +303,7 @@ story. DEVLOG §20.
   rule is now applied per layer.
 - Not fixed: the **joint**. The pooled AUC is unchanged, because the classifier
   keys on correlations between layers that none of this touches. Marginals 5×
-  closer, correlations untouched — that is the summary, and the case for
+  closer, correlations untouched, that is the summary, and the case for
   a layer-aware architecture next.
 - A dead end worth not repeating: modelling layer energies as
   `sqrt(E_layer / E_inc)` (`--energy-sqrt`) scores **0.992**. It removes every
@@ -322,8 +317,8 @@ story. DEVLOG §20.
   because empty layers put a point mass at exactly 0. Up to 31.6% of generated
   radial widths came out negative; correlation between a layer's atom mass and
   its impossible-value rate was +0.989. Continuous flows cannot represent this at
-  any capacity. Options: a two-part (hurdle) model — occupancy per layer, then
-  shape only where lit — or Sijil's approach of a hit/no-hit BCE loss plus
+  any capacity. Options: a two-part (hurdle) model, occupancy per layer, then
+  shape only where lit, or Sijil's approach of a hit/no-hit BCE loss plus
   `clamp(expm1(x), min=0)` on output. See DEVLOG §15–16.
 - In the official space it is worse: an empty layer gives log10 E_layer exactly
   −8, sparsity exactly 1, and its four centre and width columns exactly 0.
@@ -397,7 +392,7 @@ So they are not repeated:
 | real dimension "around 136-ish" | **~360** features for the CaloChallenge classifier on ds2 |
 | AD "can tell 60% at N=250", most powerful | that table combined p-values with Fisher, which over-rejects. With Bonferroni and 50 repeats: all three tests near chance at N=250; AD modestly ahead at every N (0.62 vs KS 0.50 at N=2000). A correction note is now in `meeting_2026-08-31.md` |
 | shift in "total energy", "0.03 or 0.3" | shift in **incident** energy; mean log E_inc differs by 0.034 on 30k showers, **0.018 on all 100k** (2.00σ) |
-| dataset 2 "a little bit bigger" | file 2's mean log E_inc is higher, but KS on E_inc gives p = 0.101 on the full data — consistent with noise |
+| dataset 2 "a little bit bigger" | file 2's mean log E_inc is higher, but KS on E_inc gives p = 0.101 on the full data, consistent with noise |
 | the 7 observables are "the compression the CaloChallenge people do" (agreed) | they are our own whole-shower summaries. The CaloChallenge's high-level features are per layer: 362 for ds2, counted by running their `evaluate.py` feature code on 200 showers |
 | KS, CvM and AD "produce different and independent insights" | on the same data they almost always agree: rank correlation of their statistics 0.86–0.97 per observable over 100 disjoint 1,000-vs-1,000 null splits (CvM–AD 0.95–0.97) |
 | Sinkhorn floor from "a thousand points", repeated "15 times" | no script in the repo produces 0.4151 ± 0.077, so neither the sample size nor the repeat count can be checked. The ≥10-repeat rerun should be a committed script |
@@ -439,11 +434,11 @@ So they are not repeated:
   floor the model is simply at it (−0.4 to −1.5σ on every metric).
 - **An AUC of 0.5 is weak evidence on its own.** Measured on known shifts
   (DEVLOG §19): separation power notices a 0.09 shift in mean log E_inc, while
-  the classifier needs about 0.5 — thirty times the difference between the two
+  the classifier needs about 0.5, thirty times the difference between the two
   ds2 files. Quote AUC beside a metric that has been shown to move.
 - **ds2 energies are pre-calibrated** (checked 2026-09-16 on all 200,000
   showers): 3.42% have E_tot > E_inc, and the excess is entirely a low-energy
-  effect — 12.9% in the lowest E_inc quartile, 0.79% in the second, none in the
+  effect, 12.9% in the lowest E_inc quartile, 0.79% in the second, none in the
   top half. The median E_tot/E_inc is 0.78 in every quartile, so the deposits
   carry a sampling-fraction calibration of about 0.78 and the over-unity showers
   are ordinary fluctuations where a shower is smallest.
@@ -459,8 +454,8 @@ So they are not repeated:
 | Classical tests | `pinnde_eval/classical.py` |
 | Their validation | `python -m pinnde_eval.validate_classical` (loads all 200k showers, a few minutes) |
 | Real-data null floor | `python -m pinnde_eval.validate_calo` |
-| Model on real data | `python -m flow_matching.demo_calo` (~20 min CPU, ~2 min on credne's GPU); `--features per-layer` (187) or `--features official` (362); `--device cuda` |
+| Model on real data | `python -m flow_matching.demo_calo` (~20 min CPU, ~2 min on the GPU machine's GPU); `--features per-layer` (187) or `--features official` (362); `--device cuda` |
 | Observable extraction | `pinnde_eval/observables.py` (ours), `pinnde_eval/calochallenge.py` (the challenge's 362) |
 | Floor in the official space | `python -m pinnde_eval.validate_official` |
-| Sijil's files (gitignored, laptop only) | `sijil_data/` — `Dataset2.pt` is byte-identical to `dataset_2_1.hdf5`, not needed |
-| Meeting minutes (shared) | `../meeting_minutes.md` — still ends at June 26 |
+| Sijil's files (gitignored, laptop only) | `sijil_data/`: `Dataset2.pt` is byte-identical to `dataset_2_1.hdf5`, not needed |
+| Meeting minutes (shared) | `../meeting_minutes.md`: still ends at June 26 |

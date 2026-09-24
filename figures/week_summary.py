@@ -1,6 +1,6 @@
 """Three figures for the week of 2026-09-15 to 2026-09-19.
 
-Every number below was measured on the GPU machine (credne, RTX 5090) with
+Every number below was measured on the GPU machine (RTX 5090) with
 8000 evaluation showers from ds2_2, and is named by the run that produced it so
 it can be traced back to the DEVLOG. The numbers are written out here rather
 than read from the ``.npz`` files because those files are not in git.

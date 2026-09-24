@@ -3,7 +3,7 @@
 #
 #     bash cluster/get_data.sh
 #
-# Best run on dagda: its own disk holds /home, so the 2.7 GB is written
+# Best run on the login machine: its own disk holds /home, so the 2.7 GB is written
 # locally rather than over the network. Safe to rerun: a complete file is only
 # checked, and a partial one resumes.
 #

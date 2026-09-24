@@ -3,7 +3,7 @@
 Companion to ``week_summary.py``, which covers the empty-layer fix. This one
 covers the parameterizations that were tested and rejected, and the physical
 validity checks. Numbers are named by the run that produced them; 8000
-evaluation showers each, on credne.
+evaluation showers each.
 
     python figures/week2_summary.py
 """
@@ -29,15 +29,15 @@ TRIED = [
     ("absolute energies\n(the baseline)", [45.52, 47.66], REJECTED,
      "what we started with"),
     ("E_tot relative\nto E_inc", [46.44], KEPT, "fixes the energy response"),
-    ("every energy\nrelative to E_inc", [56.02], REJECTED, "worse than doing nothing"),
-    ("widths as sqrt(x)", [23.85], REJECTED, "helped, then made redundant"),
-    ("layer energies as\nsqrt(E/E_inc)", [29.55], REJECTED, "the wrong turn"),
     ("the empty-layer fix", [9.42, 10.53], KEPT, "what worked"),
 ]
+# Three more were tried and dropped, and are left off the figure to keep it to
+# what the talk covers: every energy relative to E_inc (56.02), widths as
+# sqrt(x) (23.85) and layer energies as sqrt(E/E_inc) (29.55). DEVLOG 23-24.
 
 
 def figure_tried(path):
-    fig, ax = plt.subplots(figsize=(9, 4.6))
+    fig, ax = plt.subplots(figsize=(7, 4.4))
     for i, (label, values, color, _) in enumerate(TRIED):
         mean = np.mean(values) / FLOOR_CHI2
         ax.bar(i, mean, color=color, width=0.62)
@@ -56,7 +56,7 @@ def figure_tried(path):
     # Green means "in the recipe we use", not "scored best": E_tot-relative is
     # kept for the energy response at no chi2 gain, and sqrt widths scored well
     # but became redundant once empty layers were handled directly.
-    ax.set_title("Six ways of writing down the same showers\n"
+    ax.set_title("Three ways of writing down the same showers\n"
                  "(lower is better; green is what we kept, orange we dropped)")
     ax.grid(axis="y", alpha=0.25)
     ax.set_ylim(0, 66)
@@ -67,36 +67,34 @@ def figure_tried(path):
 
 # ---------------------------------------------------------------- figure 2
 # Percent of 8000 generated showers breaking each physical rule
-# (python -m pinnde_eval.validate_physical, 2026-09-18).
-# Columns: baseline (clip_abs), the empty-layer fix (thresh), that plus
-# --derive-total (dt_seed0). Real Geant4 is 0.00% on every row.
+# (python -m pinnde_eval.validate_physical, 2026-09-22). Two configurations,
+# both scored with the current checker: the baseline (clip_abs) and the
+# recommended setting (fix_s0), which includes the two-way emptiness rule.
+# Real Geant4 is 0.00% on every row. The last rule needs --derive-total, which
+# takes it to 0% and is discussed in the text rather than shown here.
 CHECKS = [
-    ("width or radius\nbelow zero", 72.56, 4.79, 7.16),
-    ("energy below\nan empty layer", 49.88, 0.03, 0.07),
-    ("empty layer with\na live centre", 49.88, 0.03, 0.07),
-    ("energy in\nzero voxels", 62.96, 58.59, 57.66),
-    ("sparsity outside\n[0, 1]", 58.25, 44.38, 42.19),
-    ("E_tot is not the\nsum of the layers", 100.0, 100.0, 0.0),
+    ("width or radius\nbelow zero", 72.56, 4.79),
+    ("energy below\nan empty layer", 49.88, 0.03),
+    ("empty layer with\na live centre", 49.88, 0.03),
+    ("energy in\nzero voxels", 62.96, 5.90),
+    ("sparsity outside\n[0, 1]", 58.25, 6.96),
+    ("E_tot is not the\nsum of the layers", 100.0, 100.0),
 ]
 
 
 def figure_physical(path):
-    fig, ax = plt.subplots(figsize=(9.5, 4.6))
+    fig, ax = plt.subplots(figsize=(9, 4.4))
     x = np.arange(len(CHECKS))
-    w = 0.27
+    w = 0.36
     before = [c[1] for c in CHECKS]
-    fixed = [c[2] for c in CHECKS]
-    both = [c[3] for c in CHECKS]
-    ax.bar(x - w, before, w, color=REJECTED, label="before")
-    ax.bar(x, fixed, w, color=NEUTRAL, label="the empty-layer fix")
-    ax.bar(x + w, both, w, color=KEPT, label="+ E_tot from the layers")
-    for xs, vals, color in ((x, fixed, "#4a86a8"), (x + w, both, KEPT)):
-        for xi, v in zip(xs, vals):
-            if v < 0.5:
-                ax.text(xi, 2.0, f"{v:.2f}%", ha="center", fontsize=7.5,
-                        color=color)
+    after = [c[2] for c in CHECKS]
+    ax.bar(x - w / 2, before, w, color=REJECTED, label="before")
+    ax.bar(x + w / 2, after, w, color=KEPT, label="with the fixes")
+    for xi, v in zip(x + w / 2, after):
+        if v < 1.0:
+            ax.text(xi, 2.0, f"{v:.2f}%", ha="center", fontsize=8, color=KEPT)
     ax.set_xticks(x)
-    ax.set_xticklabels([c[0] for c in CHECKS], fontsize=8)
+    ax.set_xticklabels([c[0] for c in CHECKS], fontsize=8.5)
     ax.set_ylabel("generated showers breaking the rule (%)")
     ax.set_title("Physically impossible showers\n"
                  "(real Geant4 breaks none of these: 0% on every bar)")

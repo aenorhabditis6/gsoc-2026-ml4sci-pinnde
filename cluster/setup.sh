@@ -1,36 +1,36 @@
 #!/usr/bin/env bash
 # Set up Tina/ on a cluster machine: Python environment, tests, data, validation.
 #
-# On credne (the GPU machine), which has its own tmux:
-#     ssh <username>@credne.hep.fsu.edu
+# On the GPU machine (the GPU machine), which has its own tmux:
+#     ssh <username>@the GPU machine
 #     tmux new -s setup
 #     cd ~/GSOC_2026_PINNDE/Tina
-#     VENV=~/venvs/credne bash cluster/setup.sh 2>&1 | tee ~/setup_credne.log
+#     VENV=~/venvs/the GPU machine bash cluster/setup.sh 2>&1 | tee ~/setup_the GPU machine.log
 #
-# On macha (CPU only), which has no tmux: start tmux on dagda and log into macha
-# from inside it. The dagda-to-macha connection stays inside FSU, so it survives
+# On the CPU machine (CPU only), which has no tmux: start tmux on the login machine and log into the CPU machine
+# from inside it. The the login machine-to-the CPU machine connection stays inside the university network, so it survives
 # your own connection dropping:
-#     ssh <username>@dagda.hep.fsu.edu
+#     ssh <username>@the login machine
 #     tmux new -s setup
-#     ssh macha                   (password; this also gives a Kerberos ticket)
+#     ssh the CPU machine                   (password; this also gives a Kerberos ticket)
 #     cd ~/GSOC_2026_PINNDE/Tina && bash cluster/setup.sh 2>&1 | tee ~/setup.log
 #
 # Detach with Ctrl-b then d; reattach with: tmux attach -t setup
 # Each run takes about an hour, nearly all of it pip writing ~47,000 small files
 # onto the network home folder.
 #
-# Away from dagda the home folder is only readable with a Kerberos ticket, which
+# Away from the login machine the home folder is only readable with a Kerberos ticket, which
 # lasts 10 hours. For longer jobs renew it with `kinit -R` (no password needed,
 # up to 2 days after login).
 #
-# Safe to rerun: finished steps are skipped. Download the data first on dagda
+# Safe to rerun: finished steps are skipped. Download the data first on the login machine
 # with cluster/get_data.sh; step 4 then only checks it.
 #
 # Settings (environment variables):
 #     PYTHON=python3.12   interpreter used to create the venv
 #     VENV=.venv          where the venv goes. Each machine needs its own, since
-#                         the home folder is shared: macha uses .venv, credne
-#                         uses ~/venvs/credne
+#                         the home folder is shared: the CPU machine uses .venv, the GPU machine
+#                         uses ~/venvs/the GPU machine
 
 set -euo pipefail
 cd "$(dirname "$0")/.."                 # the Tina/ folder
@@ -50,7 +50,7 @@ fi
 "$VENV/bin/python" --version
 # Install only when requirements.txt differs from what was last installed.
 if ! cmp -s cluster/requirements.txt "$VENV/installed-requirements.txt"; then
-    # No working NVIDIA driver here (macha's only card, a GeForce GT 730, is too
+    # No working NVIDIA driver here (the CPU machine's only card, a GeForce GT 730, is too
     # old for current CUDA), so take the CPU build of torch and skip the CUDA
     # libraries. requirements.txt's torch==2.13.0 accepts 2.13.0+cpu.
     if ! command -v nvidia-smi >/dev/null; then

@@ -1,4 +1,4 @@
-# DEVLOG — `pinnde_eval` calibration
+# DEVLOG, `pinnde_eval` calibration
 
 I use this file as the technical record for the evaluation module: the toy
 validation setup, the thresholds I calibrated, and the baseline numbers I use
@@ -11,7 +11,7 @@ come from a measured noise floor, not from preference.
 
 - Python: `Tina/.venv` (CPython 3.12.13, gitignored; created 2026-07-19 after
   the original `/private/tmp/pinnde_venv` was wiped with /tmp). numpy 1.26.4,
-  scipy 1.13.1 — pinned <2 by the jetnet dependency stack, see §6.
+  scipy 1.13.1, pinned <2 by the jetnet dependency stack, see §6.
 - Deps: `torch`, `numpy`, `scipy`, `scikit-learn`, `matplotlib`. `jetnet` is
   optional (Tier-2 FPD/KPD only) and now installed locally via the no-compiler
   recipe in the README.
@@ -168,11 +168,11 @@ params seed=0 / real seed=1 / gen seed=2**.
 
 **Environment note (2026-07-19):** rebuilding the venv (3.11→3.12, numpy
 1.26.4/OpenBLAS, scipy 1.13.1, current sklearn) shifted every null number
-slightly — different BLAS and library RNG paths change the drawn samples and
+slightly, different BLAS and library RNG paths change the drawn samples and
 MLP fits. Both columns are recorded below; the *new* column is the regression
 reference going forward. All asserted checks pass in both environments.
 
-### Null test (two independent draws, same GMM) — expect "no difference"
+### Null test (two independent draws, same GMM), expect "no difference"
 ```
                  2026-07 venv (3.12)          original (3.11 venv)
 mmd  :           7.51e-06                     -2.623e-06     (|·| < 1e-2 asserted)
@@ -184,7 +184,7 @@ fpd  :           0.0002063 +/- 7.4e-05        n/a (jetnet absent)
 kpd  :           0.0001608 +/- 3.1e-04        n/a
 ```
 
-### Sensitivity (metric vs eps) — every column rank-correlates with eps (ρ≥0.8)
+### Sensitivity (metric vs eps), every column rank-correlates with eps (ρ≥0.8)
 2026-07 venv numbers:
 ```
 mean:  swd 0.0513→0.3077   w1 0.0526→0.3600   auc 0.505→0.706
@@ -192,14 +192,14 @@ var :  swd 0.0513→0.1703   w1 0.0526→0.1683   auc 0.505→0.694
 drop:  swd 0.0513→0.1588   w1 0.0526→0.1683   auc 0.505→0.532   (mildest, by design)
 ```
 
-### Speed (Tier-3 monitors, n=5000, d=3) — target ≪ 1 s
+### Speed (Tier-3 monitors, n=5000, d=3), target ≪ 1 s
 ```
 mmd : ~175 ms     swd : ~10 ms     (assert mmd+swd < 2.0 s)
 ```
-Requires `OPENBLAS_NUM_THREADS=1` on this machine — see §0.
+Requires `OPENBLAS_NUM_THREADS=1` on this machine, see §0.
 
 > If a future change moves any null number materially or drops a sensitivity ρ
-> below 0.8, that's a regression — bisect against this table before relaxing a
+> below 0.8, that's a regression, bisect against this table before relaxing a
 > threshold.
 
 ---
@@ -234,7 +234,7 @@ Takeaways:
   χ² stays ≈1; AUC stays ≈0.5.
 - For the eps=0.2 mean shift, **AUC is the most sample-efficient detector
   (resolves from N=1000); every other metric needs N≥2000. Below N≈1000
-  nothing separates at 2σ** — per-condition bins smaller than ~1000 events
+  nothing separates at 2σ**, per-condition bins smaller than ~1000 events
   give monitor-grade numbers only.
 - At N=8000 the signal sits 7–12 combined σ from the null for every metric.
 
@@ -244,7 +244,7 @@ Design notes:
 - z uses the absolute mean difference: MMD's unbiased estimator and χ² can
   fluctuate below their ideal under the null.
 - The practical rule this study buys: **compare a metric against its null
-  floor at your N, never against zero** — SWD/W1 floors are pure finite-N
+  floor at your N, never against zero**, SWD/W1 floors are pure finite-N
   artifacts that fall roughly as N^(−1/2), so "SWD = 0.05" is *perfect* at
   n=8000 and *terrible* at n=500 relative to floor.
 
@@ -254,12 +254,12 @@ Design notes:
 **positive = real over-dense (missed) / negative = generated over-dense
 (hallucinated)**:
 
-- `mmd_witness` — the RBF-MMD witness function, same kernel + median
+- `mmd_witness`: the RBF-MMD witness function, same kernel + median
   bandwidth as `tier3.mmd`, so it decomposes the global monitor in space.
-- `classifier_discrepancy` — out-of-fold P(real|x) per sample from the
+- `classifier_discrepancy`: out-of-fold P(real|x) per sample from the
   Tier-1 MLP via StratifiedKFold (honest probabilities: each sample scored
   by a fold that never trained on it). Also returns the out-of-fold AUC.
-- `binned_residual_map` — the Tier-1 two-sample χ² decomposed per bin:
+- `binned_residual_map`: the Tier-1 two-sample χ² decomposed per bin:
   r = (√(Tg/Tr)·n_real − √(Tr/Tg)·n_gen)/√(n_real+n_gen), ~N(0,1) per bin
   under the null, so |r| > 3 flags a genuine local disagreement.
 
@@ -269,7 +269,7 @@ on 1.5k samples; null residual map std < 1.6 with no |r| > 5 outliers at
 
 Demo (`make_local_figure.py`, k=6 GMM with mode 0 dropped and mode 1 shifted):
 global numbers say only "something is off" (swd 0.596, mmd 3.7e-02,
-auc 0.705) while all three maps point at the two broken modes —
+auc 0.705) while all three maps point at the two broken modes,
 `figures/local_discrepancy.png`. Witness peaks red exactly on the dropped
 mode; residual map shows |r| ≈ 8–9 at the dropped/hallucinated locations and
 ~N(0,1) elsewhere; the shifted mode's samples get P(real|x) ≈ 0.
@@ -283,30 +283,30 @@ fluctuation, gamma/lognormal skew). 40k events, 6k steps, CPU ≈ 2 min.
 Results (2026-07 venv, seed 0):
 
 - Pooled over energies: swd 0.0056, mmd −8.4e-05, fpd 5.6e-05 ± 9.4e-06,
-  kpd consistent with 0, w1_mean 0.0058. AUC 0.565 ± 0.007 — the classifier
+  kpd consistent with 0, w1_mean 0.0058. AUC 0.565 ± 0.007, the classifier
   still sees a residual imperfection (χ² is 2.4 on the skewed
   sampling-fraction feature, ~1.1–1.4 on the others): the flow slightly
   under-models the gamma tail. Kept as an honest example of why AUC stays in
   the suite when the transport distances sit at the floor.
-- Per energy bin (the pooled number hides this): AUC rises with energy —
-  0.512 / 0.551 / 0.561 / 0.617 across the four c-quartiles — the
+- Per energy bin (the pooled number hides this): AUC rises with energy,
+  0.512 / 0.551 / 0.561 / 0.617 across the four c-quartiles, the
   high-energy bin is the weakest slice (narrow distributions ⇒ the same
   absolute error is more visible). SWD per bin: 0.011 / 0.009 / 0.008 / 0.009.
 - Fixed-condition interpolation at c* ∈ {0.1, 0.5, 0.9} vs fresh truth draws
   at exactly c*: per-feature means track to ≲0.5% (e.g. depth 3.705→3.700 at
   c*=0.5); swd ≈ 0.006–0.010.
 
-## 11. Real CaloChallenge data (ds2) — the `features_fn` in anger
+## 11. Real CaloChallenge data (ds2), the `features_fn` in anger
 
 `observables.py` is the `features_fn` for real showers. Data: CaloChallenge
 ds2 (electrons), <https://zenodo.org/records/6366271>, two files of 100k
 showers, `showers` (N, 6480) float64 MeV and `incident_energies` (N, 1) MeV.
-Both files are ~1.36 GB, gitignored, and must stay that way — GitHub rejects
+Both files are ~1.36 GB, gitignored, and must stay that way, GitHub rejects
 blobs over 100 MB.
 
 **Voxel flatten order is `(layer, alpha, r)`, determined empirically, not
 assumed.** 6480 = 45 layers × 16 angular × 9 radial. The dataset description
-reads "9 radial and 16 angular", which invites `reshape(45, 9, 16)` — that is
+reads "9 radial and 16 angular", which invites `reshape(45, 9, 16)`: that is
 wrong. Measured mean profiles over 2000 showers:
 
 ```
@@ -350,7 +350,7 @@ SWD and W1 are scale-dependent, so they measured `E_tot` and nothing else.
 MMD survives (median-heuristic bandwidth adapts to scale), AUC survives (the
 classifier standardizes internally), χ² and separation power survive (binned
 per feature). `evaluate(..., standardize=True)` z-scores both samples using
-**the real sample's** mean and width — one shared scaler, because fitting
+**the real sample's** mean and width, one shared scaler, because fitting
 separately would erase the mean differences the metrics exist to detect.
 Default is `False` so the §7 toy baselines stay reproducible, and a warning
 fires when feature scales span more than 100×.
@@ -390,7 +390,7 @@ draws (bins=50, mean over 7 observables, up to 4 repeats per N):
  16000    0.00171    0.00000      0.00156     1.09
 ```
 
-The floor falls 25.7× over a 32× increase in N — **1/N, not the 1/√N that
+The floor falls 25.7× over a 32× increase in N, **1/N, not the 1/√N that
 SWD and W1 follow** (§8). The law is derivable: for two same-distribution
 histograms, E[(p̂−q̂)²] ≈ 2p/N and the denominator is ≈ 2p, so each occupied
 bin contributes ≈ 1/(2N) and
@@ -400,14 +400,14 @@ bin contributes ≈ 1/(2N) and
 Measured ratios sit at 0.85–1.09, drifting below 1 for fine binning because
 empty tail bins contribute nothing (the *occupied* count is what matters, not
 the nominal one). The floor is correspondingly linear in the binning at fixed
-N — measured at N=4000: 0.00286 / 0.00508 / 0.00996 / 0.01851 for
+N, measured at N=4000: 0.00286 / 0.00508 / 0.00996 / 0.01851 for
 25 / 50 / 100 / 200 bins, close to doubling each time.
 
 **The practical consequence, and the reason this is worth reporting.** The
 CaloChallenge quotes separation powers as bare numbers. Two submissions
 evaluated at different sample sizes or with different binning are not
 comparable, and a small S is not evidence of a good model unless it is below
-`n_bins/(2N)`. At N=500 with 50 bins, a *perfect* generator scores 0.044 —
+`n_bins/(2N)`. At N=500 with 50 bins, a *perfect* generator scores 0.044,
 larger than many published per-observable separation powers. Any S reported
 here is quoted alongside its floor.
 
@@ -447,7 +447,7 @@ E 50-75%     2030   0.0329   0.498 +/- 0.015   0.01159
 E 75-100%    2002   0.0338   0.527 +/- 0.018   0.00910
 ```
 
-Pooled AUC is 0.5048 — at the floor. The lowest-energy quartile is **0.787**:
+Pooled AUC is 0.5048, at the floor. The lowest-energy quartile is **0.787**:
 trivially separable. A quarter of the data is badly modelled and the pooled
 number says nothing is wrong. This is the strongest argument yet for
 `evaluate_by_condition` being mandatory rather than optional.
@@ -457,11 +457,11 @@ Note the trend is **opposite to the toy** (§10), where AUC *rose* with energy
 skewed observables get harder to match as the distribution narrows; real
 low-energy showers are sparse and nearly discrete (sparsity up to 0.998, only
 a handful of voxels lit), which a continuous flow in observable space handles
-badly. The toy was not predictive of where the real model fails — worth
+badly. The toy was not predictive of where the real model fails, worth
 remembering before trusting any toy-derived conclusion.
 
 Per observable, `sparsity` is the worst (χ² 1.70, sep 1.7× floor) followed by
-`f_samp` (χ² 1.36) — the two bounded, most non-Gaussian quantities. Support
+`f_samp` (χ² 1.36), the two bounded, most non-Gaussian quantities. Support
 violations are small though: at most 0.40% of generated samples fall outside
 the Geant4 range of any observable, so this is a distributional failure, not
 the flow wandering off the physical support.
@@ -476,7 +476,7 @@ pooled         0.5044          0.8%              2.5
 E 0-25%        0.7872         32.3%              3.8
 ```
 
-Pooled, every local diagnostic says the generator is fine — oof AUC at the
+Pooled, every local diagnostic says the generator is fine, oof AUC at the
 floor, under 1% of generated samples confidently fake, and max |r| = 2.5,
 *below* the |r| > 3 threshold §9 calibrated for a genuine local disagreement.
 On the worst energy slice the same three maps light up: a third of generated
@@ -491,7 +491,7 @@ maps inside it. Either step alone would have missed this.
 
 ### Open modelling gap
 
-Low-energy showers. Diagnosed and fixed in §14 — the numbers in this section
+Low-energy showers. Diagnosed and fixed in §14, the numbers in this section
 are the **baseline** configuration (`hidden=128, depth=3, n_steps=12000`),
 kept because the diagnosis is the useful part.
 
@@ -500,7 +500,7 @@ kept because the diagnosis is the useful part.
 Three hypotheses for the AUC of 0.787 in the lowest energy quartile, tested in
 order. Two were wrong, and the wrong ones were informative.
 
-### A. Support / boundary pile-up — refuted
+### A. Support / boundary pile-up, refuted
 
 The idea: `sparsity` and `f_samp` are bounded, low-energy showers pile against
 the ceiling, and the flow overshoots it. Measured on 5026 low-E events:
@@ -508,7 +508,7 @@ the ceiling, and the flow overshoots it. Measured on 5026 low-E events:
 bound. A logit transform, which is what I had written into §13 as the first
 thing to try, would have done nothing.
 
-### B. Discreteness — confirmed as a fact, rejected as the cause
+### B. Discreteness, confirmed as a fact, rejected as the cause
 
 `sparsity` is a voxel *count*: it takes only the values `1 - k/6480`. Measured
 deviation from that lattice is 4.55e-13, i.e. exact. The coarseness is
@@ -526,12 +526,12 @@ during training (`+ U(0, 1/6480)`), floor back when sampling. Implemented in
 `demo_calo.FeatureTransform`.
 
 **It changed nothing: low-E AUC 0.787 → 0.785.** Kept anyway, because it is
-physically correct — generated sparsity now lands on the same lattice as
-Geant4 instead of between its teeth — but recorded as an honest negative
+physically correct, generated sparsity now lands on the same lattice as
+Geant4 instead of between its teeth, but recorded as an honest negative
 result. A real property of the data is not automatically the cause of a
 failure.
 
-### C. Joint structure — the actual cause
+### C. Joint structure, the actual cause
 
 The clue was already in §13: separation power in the low bin (0.0129) is
 barely worse than in the others (0.0117, 0.0116, 0.0090), while AUC is 0.787
@@ -559,8 +559,8 @@ high E (fine)              0.037           0.016
 worst pair, low E:  E_tot / sparsity   Geant4 -0.951   generated -0.818
 ```
 
-At low energy those two are nearly deterministic — deposit more energy, light
-more voxels, with only ~166 lit — so the observables sit close to a thin
+At low energy those two are nearly deterministic, deposit more energy, light
+more voxels, with only ~166 lit, so the observables sit close to a thin
 manifold. The flow produced a fatter cloud around it: right marginals, wrong
 correlations.
 
@@ -576,7 +576,7 @@ wider    h384 d5 30k         200        0.5068        -0.927
 wider    h384 d5 30k         800        0.5075        -0.927
 ```
 
-**ODE resolution was not the bottleneck** — 16× the integration steps moved
+**ODE resolution was not the bottleneck**: 16× the integration steps moved
 the baseline by 0.005. **Capacity was**: a wider, deeper field trained longer
 drops low-E AUC from 0.788 to 0.544, and only *then* do extra ODE steps buy
 anything (0.544 → 0.507). A velocity field too smooth to represent the
@@ -619,7 +619,7 @@ separable, which is the bar §13 said the pooled number was hiding.
 core observables that is a 187-column space, the resolution published
 CaloChallenge numbers are quoted at. Two things measured before modelling it.
 
-### The null floor moves with dimension — FPD violently
+### The null floor moves with dimension, FPD violently
 
 Geant4 vs Geant4, N=8000, standardized:
 
@@ -637,7 +637,7 @@ kpd          6.4e-06       -9.1e-07
 
 Most metrics barely move. **FPD moves by a factor of 200.** It fits Gaussians
 in the feature space and takes a Frechet distance between them, so its
-finite-N bias grows with the number of covariance entries being estimated —
+finite-N bias grows with the number of covariance entries being estimated,
 d=187 means ~17,000 covariance parameters from 8000 samples. A "small" FPD at
 one dimension is a large one at another, and FPD values are not comparable
 across feature spaces at all. This is the §8 rule (compare to the floor at
@@ -666,7 +666,7 @@ mean modal mass, by group   all E    low E
   r_width_layer             0.259    0.627
 ```
 
-At low incident energy the effective dimension is far below 187 — over half
+At low incident energy the effective dimension is far below 187, over half
 the columns are nearly constant, and 49 are essentially frozen. This is the
 §14 manifold problem made much worse: the same slice that needed extra
 capacity at d=7 now also has most of its coordinates degenerate.
@@ -685,7 +685,7 @@ now summarizes any array longer than `max_items` (default 8) as
 ## 16. The per-layer model fails, and zero-inflation explains all of it
 
 `python -m flow_matching.demo_calo --per-layer` with `hidden=512, depth=6,
-n_steps=30000` — more capacity than the d=7 fix of §14 — does not merely
+n_steps=30000`, more capacity than the d=7 fix of §14, does not merely
 degrade. It fails outright:
 
 ```
@@ -714,7 +714,7 @@ sparsity_layer (=1)   0.001         0.192          0.474       0.474
 ```
 
 A continuous density cannot put finite probability on a single point. The flow
-does the only thing it can — spreads density *around* the atom — which puts
+does the only thing it can, spreads density *around* the atom, which puts
 mass outside the physical range, since the atom sits at the boundary. Up to
 **31.6% of generated `r_width_layer` values are negative**, i.e. impossible.
 
@@ -744,7 +744,7 @@ each atom but never puts finite mass on it. The `--per-layer` run already used
 more capacity than the §14 fix and did far worse.
 
 Note also that dequantization (§14 B) does not apply. There the discreteness
-was a *lattice* — many evenly spaced atoms, which spreading over a cell
+was a *lattice*, many evenly spaced atoms, which spreading over a cell
 reproduces. Here it is a single atom at a boundary coexisting with a
 continuous part: a zero-inflated distribution, not a quantized one.
 
@@ -753,7 +753,7 @@ continuous part: a zero-inflated distribution, not a quantized one.
 A two-part (hurdle) model, which is the standard treatment for zero-inflated
 data:
 
-1. model layer **occupancy** — a Bernoulli per layer for "is this layer lit",
+1. model layer **occupancy**: a Bernoulli per layer for "is this layer lit",
    which is mostly a function of incident energy and depth;
 2. model the shape observables **conditioned on the layer being lit**, where
    they are genuinely continuous.
@@ -762,7 +762,7 @@ At generation, draw occupancy first and emit the exact atom for empty layers
 rather than a near-miss. This also removes the impossible values for free,
 since the continuous part is only ever sampled where it is defined.
 
-Not attempted yet — it is an architecture change rather than a hyperparameter,
+Not attempted yet, it is an architecture change rather than a hyperparameter,
 and the diagnosis is what this section is for. A cheaper intermediate worth
 measuring first: restrict to the front layers, where the atom mass is small
 (layers 0-9 sit at 0.001 for energy and 0.048 for `r_width`), and check that
@@ -801,7 +801,7 @@ false-positive rate.
 ```
 
 Every rate sits near 0.05, including `sparsity`, which is a voxel count and so
-has ties — the one assumption KS genuinely needs. The splits must be disjoint:
+has ties, the one assumption KS genuinely needs. The splits must be disjoint:
 drawing each split independently from the pool reuses showers, which correlates
 the p-values and manufactures differences between tests that more sampling does
 not reproduce.
@@ -889,7 +889,7 @@ and 20. Inside a single 1000-vs-1000 split the energy difference is only 0.2 to
 
 The file-to-file difference itself is real but small: over all 100,000 showers
 per file the mean log E_inc differs by 0.018, which is 2.0σ, and KS on E_inc
-gives p = 0.10 — about what two independent draws produce one time in twenty.
+gives p = 0.10, about what two independent draws produce one time in twenty.
 
 ---
 
@@ -916,7 +916,7 @@ definitions. It downloads `HighLevelFeatures.py`, `XMLHandler.py`,
 commit `3073d13` and checked by MD5. Their repository declares no licence, so
 none of it is committed here.
 
-Only the final assembly — which columns, in which order, with which scaling —
+Only the final assembly, which columns, in which order, with which scaling,
 lives on our side, and `tests/test_calochallenge.py` checks it against their own
 `prepare_high_data_for_classifier` on 200 real showers: the two agree to a
 relative 1e-12. Two columns can also be checked independently against
@@ -1089,7 +1089,7 @@ fpd           0.00016    0.00026   +1.8      0.18466    0.19716   +3.5
 ```
 
 The binned and distance metrics sit well below the usual floor once energies are
-matched — by 3 to 5 standard errors — while AUC and Sinkhorn barely move. So
+matched, by 3 to 5 standard errors, while AUC and Sinkhorn barely move. So
 every chi2, SWD, W1 and separation-power number quoted for a conditional model
 so far has been read against a floor that was too generous, which is what let
 the model of §13 look *better than Geant4*. Against the matched floor the d=7
@@ -1146,8 +1146,8 @@ file, and randomly shuffled subsets all score AUC 0.49 to 0.51, and the mean log
 E_inc per 10,000-shower block varies only between 10.33 and 10.39.
 
 **The numbers reproduce across machines.** `validate_classical` printed output
-identical to the laptop on macha (AlmaLinux, CPU torch). The classifier-based
-floors agree to about 4e-04 in AUC between laptop and dagda, well inside the
+identical to the laptop on the CPU machine (AlmaLinux, CPU torch). The classifier-based
+floors agree to about 4e-04 in AUC between laptop and the login machine, well inside the
 +/-0.005 spread across repeats, which is as close as a floating-point-sensitive
 MLP gets.
 
@@ -1158,7 +1158,7 @@ MLP gets.
 `python -m flow_matching.demo_calo --features official --device cuda`, the
 configuration that works at d=7 (`hidden=384, depth=5, n_steps=30000`), trained
 on 100,000 showers and scored against 8,000 from the other file. 96 seconds on
-credne's RTX 5090, against about 20 minutes for the same run on a laptop CPU at
+the GPU machine's RTX 5090, against about 20 minutes for the same run on a laptop CPU at
 d=7.
 
 It fails, and not narrowly:
@@ -1763,7 +1763,7 @@ being a source of difference between the two tracks.
 
 ### 26. The first voxel runs: what actually breaks
 
-Five runs on credne, 100k showers and 100k steps each, about 5 minutes apiece.
+Five runs on the GPU machine, 100k showers and 100k steps each, about 5 minutes apiece.
 The model does not work yet, and the reasons are specific and measured.
 
 ```

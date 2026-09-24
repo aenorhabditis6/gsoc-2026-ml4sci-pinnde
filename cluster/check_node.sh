@@ -23,7 +23,7 @@ echo "cpus:  $(nproc 2>/dev/null)"
 free -g 2>/dev/null | head -2
 
 section "home and disks"
-# /home lives on dagda; other machines mount it over NFS with Kerberos, so
+# /home lives on the login machine; other machines mount it over NFS with Kerberos, so
 # there it is only readable while you hold a valid ticket (see klist).
 echo "home is on: $(findmnt -n -o SOURCE,FSTYPE --target "$HOME")"
 klist 2>&1 | head -6
