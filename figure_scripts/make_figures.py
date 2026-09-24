@@ -18,14 +18,14 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from pinnde_eval._utils import to_numpy
 from pinnde_eval.data import gmm_params, sample_gmm
 from pinnde_eval.validate_toys import sensitivity_test
 from flow_matching import sample, train_flow_matching
 
-OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "figures")
+OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "figures")
 os.makedirs(OUT, exist_ok=True)
 SEED = 0
 

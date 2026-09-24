@@ -4,13 +4,12 @@
 Contributor: Tina · June to September 2026
 
 Simulating particle showers in a calorimeter with Geant4 is accurate and slow,
-and it consumes a large share of computing in high energy physics. This project
-trains a generative model to produce the same showers in milliseconds, and,
-just as importantly, builds the measuring equipment to tell whether the result
-is actually good.
+and it uses a large share of computing in high energy physics. This project
+trains a generative model to produce the same showers in milliseconds, and
+builds the tools needed to check whether the result is good.
 
-This repository is my GSoC final submission: the code, the tests, the full
-development log, and the report.
+This repository is my GSoC final submission: the code, the tests, the
+development log and the report.
 
 ---
 
@@ -24,14 +23,14 @@ development log, and the report.
 
 ## What is here
 
-**`pinnde_eval/`** is an evaluation module, built to be the shared yardstick for
-both tracks of the project. One call compares any two sets of showers with three
-tiers of metrics: cheap monitors for use inside a training loop, the
-CaloChallenge's own classifier AUC, chi-squared and separation power, and
-distribution distances with error bars. It also computes the challenge's own 362
-high-level features using their code, measures what a *perfect* generator scores
-so that no number is ever compared against zero, and checks whether a single
-generated shower is physically possible at all.
+**`pinnde_eval/`** is the evaluation module, written to be used by both tracks
+of the project. One call compares any two sets of showers with three tiers of
+metrics: cheap monitors to run inside a training loop, the CaloChallenge's own
+classifier AUC, chi-squared and separation power, and distribution distances
+with error bars. It also computes the challenge's own 362 high-level features
+using their code, measures what a perfect generator scores so that no number is
+compared against zero, and checks whether a single generated shower is
+physically possible.
 
 **`flow_matching/`** is the generator. It learns a velocity field by regressing
 onto straight-line paths from noise to data, and samples by integrating an ODE.
@@ -39,8 +38,9 @@ It is conditional on the incident particle energy, so it learns a family of
 distributions rather than one. Two entry points: `demo_calo.py` generates the
 362 summary features, `demo_voxels.py` generates the 6,480 raw detector cells.
 
-**`figures/`** holds every figure in the report and the scripts that produce
-them, each carrying the numbers it plots and the run they came from.
+**`figures/`** holds the figures used in the report. **`figure_scripts/`**
+holds the scripts that produce them; each one carries the numbers it plots and
+the run they came from.
 
 **`cluster/`** has the setup scripts used to get this running on a GPU machine.
 
@@ -70,10 +70,10 @@ and a nine-second evaluation looks like a thirty-minute hang.
 ## The main result
 
 A calorimeter shower does not light up every layer, and an empty layer is
-recorded as an *exact* value. That is 17.8% of all layer-and-shower pairs. A
-flow matching model produces a continuous density, which assigns zero
+recorded as an exact value. That happens in 17.8% of all layer-and-shower
+pairs. A flow matching model produces a continuous density, which assigns zero
 probability to any exact value, so it reproduced empty layers **0.0% of the
-time** at any model size.
+time**, at any model size.
 
 Giving that point mass a band of unused values to land in during training, and
 snapping it back when sampling, moved the chi-squared statistic from **50.7 to
@@ -83,13 +83,14 @@ previously bought 0.09 in AUC.
 
 ![How often a layer holds no energy](figures/week_empty_layers.png)
 
-The whole-shower classifier did not move, and [section 6 of the
-report](FINAL_REPORT.md) explains what I learned about why: I tested my own
-explanation for it and it was wrong.
+The whole-shower classifier did not move. [Section 6 of the
+report](FINAL_REPORT.md) covers what I found when I tested my own explanation
+for that, which turned out to be wrong.
 
 ## Notes
 
-The CaloChallenge evaluation code is downloaded on demand rather than vendored
-here, since it carries no licence. `pinnde_eval/calochallenge.py` pins it by
-commit hash and checksum, and a test verifies our feature assembly against their
-own function to a relative tolerance of 1e-12.
+The CaloChallenge evaluation code is downloaded on demand rather than copied
+into this repository, because it carries no licence.
+`pinnde_eval/calochallenge.py` pins it by commit hash and checksum, and a test
+checks our feature assembly against their own function to a relative tolerance
+of 1e-12.

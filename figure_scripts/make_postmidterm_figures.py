@@ -16,7 +16,7 @@ Five figures, each one measurement from the write-up:
 import os
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import matplotlib
 matplotlib.use("Agg")
@@ -27,7 +27,7 @@ import pinnde_eval as pe
 from pinnde_eval.observables import observables_from_file
 from pinnde_eval.tier2 import wasserstein_per_feature
 
-FIG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "figures")
+FIG = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "figures")
 DS1 = "dataset_2_1.hdf5"
 DS2 = "dataset_2_2.hdf5"
 GEOM = pe.GEOMETRIES["ds2"]

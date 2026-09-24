@@ -157,7 +157,7 @@ SWD). Three maps in `pinnde_eval.local` point at the failing *region*:
 | `binned_residual_map(real, gen, features=(0,1))` | which histogram bins disagree? | per-bin z ~ N(0,1) under null; \|z\| > 3 = genuine local failure |
 
 ```bash
-python make_local_figure.py        # demo: all three maps light up on the broken modes
+python figure_scripts/make_local_figure.py        # demo: all three maps light up on the broken modes
 ```
 
 All three run in feature space, so for showers they apply to any observable pair
@@ -259,9 +259,9 @@ real-data integration test skips itself when the ds2 file is absent.
 
 ## Reproduce the figures (in `figures/`)
 ```bash
-python make_figures.py        # sensitivity + flow-matching result figures
-python make_flow_figure.py    # velocity field + noise->data trajectories
-python make_local_figure.py   # local discrepancy maps on a broken generator
+python figure_scripts/make_figures.py        # sensitivity + flow-matching result figures
+python figure_scripts/make_flow_figure.py    # velocity field + noise->data trajectories
+python figure_scripts/make_local_figure.py   # local discrepancy maps on a broken generator
 python -m pinnde_eval.stability   # metric stability vs sample size
 ```
 
@@ -326,11 +326,8 @@ Tina/
 │   ├── demo.py         toy GMM demo, scored with pinnde_eval
 │   ├── demo_conditional.py  p(observables | energy) toy demo, scored per energy bin
 │   ├── demo_calo.py    p(observables | E_inc) on real ds2, vs the Geant4 floor
+│   ├── demo_voxels.py  the same, generating the 6480 raw voxels instead
 │   └── tests/
 ├── figures/            generated result figures
-├── make_figures.py     reproduce the result figures
-├── make_flow_figure.py reproduce the velocity-field / trajectory figure
-├── make_local_figure.py reproduce the local-discrepancy demo figure
-├── make_postmidterm_figures.py reproduce the real-data result figures
-└── make_classical_figures.py   reproduce the classical-test figures
+└── figure_scripts/     the scripts that produce them, one per figure set
 ```

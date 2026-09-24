@@ -24,14 +24,14 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from pinnde_eval import evaluate, classifier_discrepancy, mmd_witness
 from pinnde_eval._utils import seed_all, to_numpy
 from pinnde_eval.data import gmm_params, perturb_params, sample_gmm
 from pinnde_eval.local import binned_residual_map
 
-OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "figures")
+OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "figures")
 os.makedirs(OUT, exist_ok=True)
 SEED = 0
 N = 6000

@@ -11,7 +11,7 @@
 import os
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import matplotlib
 matplotlib.use("Agg")
@@ -23,7 +23,7 @@ from pinnde_eval.classical import (combine_pvalues, pvalue_uniformity,
 from pinnde_eval.observables import observables_from_file
 from pinnde_eval.tier1 import separation_power
 
-FIG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "figures")
+FIG = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "figures")
 N_LOAD, CHUNK = 100000, 1000
 GOOD, BAD, NEUTRAL = "#1F8A5B", "#C2413A", "#41566B"
 

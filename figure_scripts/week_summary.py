@@ -5,7 +5,7 @@ Every number below was measured on the GPU machine (RTX 5090) with
 it can be traced back to the DEVLOG. The numbers are written out here rather
 than read from the ``.npz`` files because those files are not in git.
 
-    python figures/week_summary.py
+    python figure_scripts/week_summary.py
 """
 
 import os
@@ -15,7 +15,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-HERE = os.path.dirname(os.path.abspath(__file__))
+HERE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "figures")
 
 GEANT4 = "#2c3e50"      # real data, everywhere
 BEFORE = "#e67e22"      # the model before this week's fix

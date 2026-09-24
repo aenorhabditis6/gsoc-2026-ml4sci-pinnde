@@ -5,7 +5,7 @@ covers the parameterizations that were tested and rejected, and the physical
 validity checks. Numbers are named by the run that produced them; 8000
 evaluation showers each.
 
-    python figures/week2_summary.py
+    python figure_scripts/week2_summary.py
 """
 
 import os
@@ -15,7 +15,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-HERE = os.path.dirname(os.path.abspath(__file__))
+HERE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "figures")
 
 GEANT4 = "#2c3e50"
 REJECTED = "#e67e22"
