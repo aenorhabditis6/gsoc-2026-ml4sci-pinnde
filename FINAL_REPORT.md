@@ -114,9 +114,11 @@ correction.
 **The marginals, not the correlations, are the binding constraint.** The natural
 reading of "chi2 improved fourfold, the classifier did not move" is that what
 remains is cross-layer correlation. Install this model's marginals into Geant4's
-exact correlation structure and the result is still detectable at 0.916, against
-0.929 for the model itself, so per-feature accuracy is what the classifier
-reads.
+exact correlation structure and the result is still detectable at about 0.92,
+against about 0.93 for the model itself. Correlations add roughly 0.01 on top of
+the marginal error, so per-feature accuracy is what the classifier reads.
+`pinnde_eval/validate_claims.py` reproduces this from a saved sample file, and
+the exact digits move by a few thousandths depending on which run it is given.
 
 That test is only well posed where no point masses couple the columns together,
 so it was run on the front ten layers, which are almost never empty. Those are
@@ -184,5 +186,6 @@ In order of expected value:
    against measured floors.
 
 `pinnde_eval/DEVLOG.md` is the full record, 30 sections, including the
-measurements that contradicted things believed earlier. `HANDOFF.md` has the
-cluster details and the practical notes.
+measurements that contradicted things believed earlier.
+`pinnde_eval/validate_claims.py` re-runs the three measurements in this report
+that did not come from the normal scoring path.

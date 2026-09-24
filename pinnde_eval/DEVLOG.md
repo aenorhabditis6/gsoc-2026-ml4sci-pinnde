@@ -880,9 +880,9 @@ committed script.
 
 ### The calibration figure is not evidence of the file-to-file shift
 
-`meeting_2026-08-31.md` shows KS p-values for file 1 against file 2 with 35 of
-210 below 0.1 where 21 are expected, and puts the excess down to the incident
-energy difference between the files. That does not survive checking. The figure
+A calibration figure made for the 31 August meeting showed KS p-values for file
+1 against file 2 with 35 of 210 below 0.1 where 21 are expected, and put the
+excess down to the incident energy difference between the files. That does not survive checking. The figure
 uses the first 30,000 showers of each file; the next two blocks of 30,000 give 12
 and 20. Inside a single 1000-vs-1000 split the energy difference is only 0.2 to
 0.4 standard errors, far too small to cause it.
@@ -1890,8 +1890,9 @@ scored exactly the way a model is:
   layers 30-44               120     0.4936
 ```
 
-They span 0.4875 to 0.5026, so reading a family against 0.5 is fair to about
-+-0.013. In particular "the totals family sits on the floor at 0.502" is
+They span about 0.487 to 0.504, so reading a family against 0.5 is fair to about
++-0.013. `pinnde_eval/validate_claims.py` reproduces this; the last digit moves
+between runs of the classifier. In particular "the totals family sits on the floor at 0.502" is
 supported: the measured floor for that family is 0.4884.
 
 ### 28. Five seeds each: the headline numbers, corrected
@@ -1950,8 +1951,11 @@ showers with every one of those layers lit):
   with the fix          0.9286                    0.9160
 ```
 
+Those digits are for these two runs; `pinnde_eval/validate_claims.py` repeats
+the measurement on any saved sample file and lands within a few thousandths.
+
 **The marginals alone account for nearly all of the detectability.** Correlations
-add about 0.013 of AUC. The "we fixed the vocabulary, the grammar is still
+add about 0.01 of AUC. The "we fixed the vocabulary, the grammar is still
 wrong" framing is backwards: the vocabulary is still wrong, just less so, and it
 is still what gives the model away.
 
