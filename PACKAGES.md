@@ -5,7 +5,7 @@ Two self-contained Python packages for the PINNDE project:
 | Package | What it is |
 |---|---|
 | **`pinnde_eval/`** | A shared, quantitative **evaluation module** — one function compares any two point clouds (real vs. generated) with three tiers of metrics. Meant to be the common yardstick for *both* tracks (score-based and flow-matching). |
-| **`flow_matching/`** | A **conditional flow-matching generator** — learns a velocity field and generates by integrating an ODE from noise to data. A simulation-free alternative to the score-based track's O(N·M) Monte-Carlo score estimate. |
+| **`flow_matching/`** | A **conditional flow-matching generator** — learns a velocity field and generates by integrating an ODE from noise to data. Simulation-free: training never integrates the ODE, so there is no O(N·M) Monte-Carlo score estimate inside the loss. |
 
 Everything is plain functions + a couple of small `nn.Module`s, fully seeded, and
 tested. Inputs are torch tensors **or** numpy arrays of shape `(N, d)`.

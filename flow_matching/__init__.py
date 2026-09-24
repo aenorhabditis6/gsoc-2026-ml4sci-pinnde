@@ -8,8 +8,8 @@ by integrating dx/dt = v_theta(x, t) from noise to data.
     model, history = train_flow_matching(data, dim=2)
     gen = sample(model, n=5000, dim=2)
 
-Quality is measured with the shared ``pinnde_eval`` module so the flow-matching
-and score-based tracks produce directly comparable numbers.
+Quality is measured with the ``pinnde_eval`` module, so results here are
+directly comparable with anything else scored the same way.
 """
 
 from .core import fm_loss, sample

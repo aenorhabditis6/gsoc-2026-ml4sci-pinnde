@@ -11,7 +11,7 @@ Training (simulation-free, O(batch)):
   * the target velocity is the constant  u = x1 - x0,
   * regress  v_theta(x_t, t)  onto u with an MSE loss.
 
-This replaces the score-based track's O(N*M) Monte-Carlo score estimate: the
+This avoids an O(N*M) Monte-Carlo score estimate: the
 target here is exact, not a noisy kernel sum.
 
 Generation: integrate  dx/dt = v_theta(x, t)  from t=0 (noise) to t=1 (data)

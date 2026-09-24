@@ -1758,8 +1758,8 @@ Still to measure (needs the GPU): whether a properly trained voxel model is
 competitive on the distribution metrics. `~/run_voxels.sh` runs a 20k-step
 sanity check, the full 100k-shower run, and a `--no-atom-snap` ablation that
 doubles as the minimally-preprocessed configuration for comparing against
-Sijil's approach -- the meeting asked that we align preprocessing so it stops
-being a source of difference between the two tracks.
+a minimally preprocessed baseline, which the meeting asked for so that
+preprocessing stops being a source of difference between approaches.
 
 ### 26. The first voxel runs: what actually breaks
 

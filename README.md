@@ -23,8 +23,8 @@ development log and the report.
 
 ## What is here
 
-**`pinnde_eval/`** is the evaluation module, written to be used by both tracks
-of the project. One call compares any two sets of showers with three tiers of
+**`pinnde_eval/`** is the evaluation module, written so that any generative
+model on this data can be scored the same way. One call compares any two sets of showers with three tiers of
 metrics: cheap monitors to run inside a training loop, the CaloChallenge's own
 classifier AUC, chi-squared and separation power, and distribution distances
 with error bars. It also computes the challenge's own 362 high-level features

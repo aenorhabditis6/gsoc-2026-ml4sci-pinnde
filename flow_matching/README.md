@@ -1,7 +1,7 @@
 # flow_matching
 
 Conditional flow-matching generator for the PINNDE flow track — a
-simulation-free alternative to the score-based track's O(N·M) Monte-Carlo score
+simulation-free alternative to an O(N·M) Monte-Carlo score
 estimate.
 
 **Idea.** Learn a velocity field `v_theta(x, t)` by regressing it onto a

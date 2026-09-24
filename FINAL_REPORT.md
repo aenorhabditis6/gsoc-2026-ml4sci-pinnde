@@ -18,8 +18,8 @@ starts from noise and follows the field. The target is exact and needs no
 simulation during training, and the straight paths mean few steps are needed to
 generate.
 
-My colleague Sijil's track uses a score-based model on the same data. The evaluation module
-below was built to be the shared yardstick for both.
+The evaluation module below was written to be usable by any generative model
+on this data, not only this one.
 
 Data is CaloChallenge dataset 2: two files of 100,000 showers, 6,480 voxels each
 (45 layers × 16 angular × 9 radial), incident energies log-uniform from 1 GeV to
