@@ -1,8 +1,7 @@
 # Flow-matching track: report at the technical end date
 
-GSoC 2026, ML4SCI / GENIE, PINNDE project. 15 June to 22 September 2026.
-Everything here is in this repository under `Tina/`. Work continues past this
-date; section 6 is the plan, not a handover.
+GSoC 2026, ML4SCI / GENIE, PINNDE project. 
+15 June to 22 September 2026.
 
 ---
 
@@ -19,7 +18,7 @@ starts from noise and follows the field. The target is exact and needs no
 simulation during training, and the straight paths mean few steps are needed to
 generate.
 
-Sijil's track uses a score-based model on the same data. The evaluation module
+My colleague Sijil's track uses a score-based model on the same data. The evaluation module
 below was built to be the shared yardstick for both.
 
 Data is CaloChallenge dataset 2: two files of 100,000 showers, 6,480 voxels each
